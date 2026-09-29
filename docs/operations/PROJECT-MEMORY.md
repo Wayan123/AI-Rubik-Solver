@@ -32,6 +32,18 @@ Live runs, all observed on 2026-09-29:
 - npm scripts call `vite` and `tsx` directly. An old npm on the script PATH looped forever on
   `npm run --workspace`.
 
+## Model coverage (observed 2026-09-29)
+
+- Working login-based sources: Pi → `openai-codex/*` (ChatGPT/Codex OAuth, including `gpt-6-astra`),
+  `kiro/*`, `antigravity/*`, and the Hermes adapter (`hermes -z`, provider `openai-codex`).
+- Not working here: Codex CLI and Claude Code (not logged in); Gemini CLI (personal tier retired, use Antigravity);
+  OpenCode free model (401); Pi `nvidia/*` (no answer within 180 s); `openai-codex/gpt-5.3-codex-spark`
+  (not supported for this account).
+- Hermes safety: `-t ""` is ignored and falls back to the configured toolsets; in a test these wrote
+  `~/pwned.txt` (removed). The adapter uses `-t clarify`, and a repeat test created no file.
+- Pi provider extensions are auto-discovered from `~/.pi/agent/settings.json` packages. Nested model ids such as
+  `nvidia/z-ai/glm-5.3` are accepted.
+
 ## Next (M2 candidates)
 
 - Adapters for Codex, Claude Code, Gemini CLI, Hermes and OpenCode. Flags are recorded in

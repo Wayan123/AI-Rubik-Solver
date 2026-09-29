@@ -105,6 +105,22 @@ export function ContestantEditor({
           </datalist>
         </label>
       )}
+      {value.adapter === "hermes" && (
+        <label className="field">
+          <span>Hermes provider</span>
+          <input
+            value={String(value.options?.provider ?? "")}
+            placeholder="openai-codex (ChatGPT/Codex login)"
+            spellCheck={false}
+            onChange={(e) =>
+              set("options", {
+                ...value.options,
+                provider: e.target.value.replace(/[^\w.-]/g, "") || undefined,
+              })
+            }
+          />
+        </label>
+      )}
       {value.adapter === "openai-compatible" && (
         <div className="grid-2">
           <label className="field">

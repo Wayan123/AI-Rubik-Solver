@@ -94,6 +94,16 @@ const SOURCE_LABEL: Record<string, string> = {
   "random-state": "Full random state",
 };
 
+/** Presets grouped by their `group` field, keeping file order. */
+function groupPresets(list: ContestantConfig[]): Array<[string, ContestantConfig[]]> {
+  const groups = new Map<string, ContestantConfig[]>();
+  for (const p of list) {
+    const g = p.group ?? "Other";
+    groups.set(g, [...(groups.get(g) ?? []), p]);
+  }
+  return [...groups.entries()];
+}
+
 let idCounter = 0;
 const newId = () => `c${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
@@ -344,10 +354,14 @@ export function App() {
                   }}
                 >
                   <option value="">Add preset…</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
+                  {groupPresets(presets).map(([group, items]) => (
+                    <optgroup key={group} label={group}>
+                      {items.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               )}

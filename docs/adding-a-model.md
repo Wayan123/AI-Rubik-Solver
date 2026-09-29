@@ -47,15 +47,18 @@ Then:
 
 ## Headless flags
 
-These flags were checked with `--help` on 2026-09-29; the adapters that don't exist yet have not been probed
-end-to-end.
+These flags were checked with `--help` on 2026-09-29. Rows not marked implemented have not been probed end-to-end.
+
+To check that tools are really off, ask the model through the adapter's argv to create a file in `$HOME` and
+in the working directory, then look for the files. Pi `--no-tools` and Hermes `-t clarify` created nothing.
+Kiro `--trust-tools=` attempted a Write File call and refused it.
 
 | CLI (version) | Non-interactive, tools off | Output | Model / effort |
 |---|---|---|---|
 | Codex 0.157.1 | `codex exec --ephemeral --skip-git-repo-check -s read-only` | `--json`, `-o <file>` | `-m`, `-c model_reasoning_effort=…` |
 | Claude Code 2.1.63 | `claude -p --tools "" --no-session-persistence --strict-mcp-config` | `--output-format stream-json` | `--model`, `--effort` |
 | Gemini CLI 0.43.0 | `gemini -p <prompt> --approval-mode plan -e none` | `-o stream-json` | `-m` |
-| Hermes 0.21.3 | `hermes -z <prompt> --ignore-rules -t ""` | stdout, `--usage-file` | `-m`, `--provider`, `--reasoning` |
+| Hermes 0.21.3 | **implemented** (`hermes` adapter): `hermes -z <prompt> --ignore-rules -t clarify`. **Never `-t ""`**: Hermes treats it as unset and loads your configured tools; observed writing to `$HOME`. | stdout, `--usage-file` | `-m`, `--provider`, `--reasoning` |
 | OpenCode 1.15.3 | `opencode run --pure` | `--format json` | `-m provider/model`, `--variant` |
 
 Never pass `--yolo`, `--dangerously-*`, `--trust-all-tools`, `bypassPermissions` or similar flags. If a CLI cannot

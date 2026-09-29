@@ -1,32 +1,92 @@
 {
-  "$comment": "Contestant presets shown in the dashboard. No secrets here: API keys are referenced by env var name (apiKeyEnv) and read by the runner. Model ids are whatever your CLI accepts; list them with `pi --list-models` or `kiro-cli chat --list-models`.",
+  "$comment": "Contestant presets shown in the dashboard. Login-based (no API key) presets were probed on 2026-09-29 with `pi -p --no-tools` / `hermes -z`. No secrets here: BYOK keys are referenced by env var name (apiKeyEnv). Discover more ids with `pi --list-models` or `kiro-cli chat --list-models`.",
   "contestants": [
     {
       "id": "pi-kiro-opus-5-5-high",
-      "label": "Claude Opus 5.5 · high (Pi → Kiro)",
+      "group": "Kiro login",
+      "label": "Claude Opus 5.5 · high (Kiro)",
       "adapter": "pi",
       "model": "kiro/claude-opus-5-5",
       "thinking": "high",
-      "mode": "interactive",
-      "maxTurns": 30,
-      "maxMovesPerTurn": 10
+      "mode": "interactive"
     },
     {
       "id": "kociemba",
+      "group": "Baselines",
       "label": "Kociemba (baseline)",
       "adapter": "kociemba",
       "mode": "interactive"
     },
+
     {
-      "id": "random",
-      "label": "Random mover (baseline)",
-      "adapter": "random",
-      "mode": "interactive",
-      "maxTurns": 10
+      "id": "pi-codex-gpt-6-astra",
+      "group": "ChatGPT / Codex login",
+      "label": "GPT-6 Astra · high (ChatGPT/Codex)",
+      "adapter": "pi",
+      "model": "openai-codex/gpt-6-astra",
+      "thinking": "high",
+      "mode": "interactive"
     },
     {
+      "id": "pi-codex-gpt-6-sol",
+      "group": "ChatGPT / Codex login",
+      "label": "GPT-6 Sol · high (ChatGPT/Codex)",
+      "adapter": "pi",
+      "model": "openai-codex/gpt-6-sol",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-codex-gpt-6-luna",
+      "group": "ChatGPT / Codex login",
+      "label": "GPT-6 Luna · high (ChatGPT/Codex)",
+      "adapter": "pi",
+      "model": "openai-codex/gpt-6-luna",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-codex-gpt-5-6-sol",
+      "group": "ChatGPT / Codex login",
+      "label": "GPT-5.6 Sol · high (ChatGPT/Codex)",
+      "adapter": "pi",
+      "model": "openai-codex/gpt-5.6-sol",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-codex-gpt-5-6-terra",
+      "group": "ChatGPT / Codex login",
+      "label": "GPT-5.6 Terra · high (ChatGPT/Codex)",
+      "adapter": "pi",
+      "model": "openai-codex/gpt-5.6-terra",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-codex-gpt-5-5",
+      "group": "ChatGPT / Codex login",
+      "label": "GPT-5.5 · high (ChatGPT/Codex)",
+      "adapter": "pi",
+      "model": "openai-codex/gpt-5.5",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "hermes-gpt-6-astra",
+      "group": "ChatGPT / Codex login",
+      "label": "GPT-6 Astra · high (Hermes)",
+      "adapter": "hermes",
+      "model": "gpt-6-astra",
+      "thinking": "high",
+      "mode": "interactive",
+      "options": { "provider": "openai-codex" }
+    },
+
+    {
       "id": "pi-kiro-opus-5",
-      "label": "Claude Opus 5 · high (Pi → Kiro)",
+      "group": "Kiro login",
+      "label": "Claude Opus 5 · high (Kiro)",
       "adapter": "pi",
       "model": "kiro/claude-opus-5",
       "thinking": "high",
@@ -34,7 +94,8 @@
     },
     {
       "id": "pi-kiro-sonnet-5",
-      "label": "Claude Sonnet 5 · high (Pi → Kiro)",
+      "group": "Kiro login",
+      "label": "Claude Sonnet 5 · high (Kiro)",
       "adapter": "pi",
       "model": "kiro/claude-sonnet-5",
       "thinking": "high",
@@ -42,15 +103,35 @@
     },
     {
       "id": "pi-kiro-gpt-5-6-sol",
-      "label": "GPT-5.6 Sol (Pi → Kiro)",
+      "group": "Kiro login",
+      "label": "GPT-5.6 Sol · high (Kiro)",
       "adapter": "pi",
       "model": "kiro/gpt-5-6-sol",
       "thinking": "high",
       "mode": "interactive"
     },
     {
+      "id": "pi-kiro-gpt-5-6-terra",
+      "group": "Kiro login",
+      "label": "GPT-5.6 Terra · high (Kiro)",
+      "adapter": "pi",
+      "model": "kiro/gpt-5-6-terra",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-kiro-gpt-5-6-luna",
+      "group": "Kiro login",
+      "label": "GPT-5.6 Luna · high (Kiro)",
+      "adapter": "pi",
+      "model": "kiro/gpt-5-6-luna",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
       "id": "pi-kiro-deepseek-3-2",
-      "label": "DeepSeek 3.2 (Pi → Kiro)",
+      "group": "Kiro login",
+      "label": "DeepSeek 3.2 · high (Kiro)",
       "adapter": "pi",
       "model": "kiro/deepseek-3-2",
       "thinking": "high",
@@ -58,23 +139,90 @@
     },
     {
       "id": "pi-kiro-glm-5",
-      "label": "GLM-5 (Pi → Kiro)",
+      "group": "Kiro login",
+      "label": "GLM-5 · high (Kiro)",
       "adapter": "pi",
       "model": "kiro/glm-5",
       "thinking": "high",
       "mode": "interactive"
     },
     {
+      "id": "pi-kiro-qwen3-coder-next",
+      "group": "Kiro login",
+      "label": "Qwen3 Coder Next (Kiro)",
+      "adapter": "pi",
+      "model": "kiro/qwen3-coder-next",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-kiro-minimax-m2-5",
+      "group": "Kiro login",
+      "label": "MiniMax M2.5 (Kiro)",
+      "adapter": "pi",
+      "model": "kiro/minimax-m2-5",
+      "mode": "interactive"
+    },
+    {
       "id": "kiro-cli-opus-5-5",
+      "group": "Kiro login",
       "label": "Claude Opus 5.5 (kiro-cli direct)",
       "adapter": "kiro-cli",
       "model": "claude-opus-5.5",
       "thinking": "high",
       "mode": "interactive"
     },
+
+    {
+      "id": "pi-ag-gemini-3-1-pro",
+      "group": "Google Antigravity login",
+      "label": "Gemini 3.1 Pro · high (Antigravity)",
+      "adapter": "pi",
+      "model": "antigravity/gemini-3.1-pro",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-ag-gemini-3-8-flash",
+      "group": "Google Antigravity login",
+      "label": "Gemini 3.8 Flash (Antigravity)",
+      "adapter": "pi",
+      "model": "antigravity/gemini-3.8-flash",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-ag-claude-opus-4-6",
+      "group": "Google Antigravity login",
+      "label": "Claude Opus 4.6 (Antigravity)",
+      "adapter": "pi",
+      "model": "antigravity/claude-opus-4-6",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+    {
+      "id": "pi-ag-gpt-oss-120b",
+      "group": "Google Antigravity login",
+      "label": "GPT-OSS 120B (Antigravity)",
+      "adapter": "pi",
+      "model": "antigravity/gpt-oss-120b",
+      "thinking": "high",
+      "mode": "interactive"
+    },
+
+    {
+      "id": "random",
+      "group": "Baselines",
+      "label": "Random mover (baseline)",
+      "adapter": "random",
+      "mode": "interactive",
+      "maxTurns": 10
+    },
+
     {
       "id": "ollama-local",
-      "label": "Local model via Ollama (example)",
+      "group": "Local / BYOK (examples)",
+      "label": "Local model via Ollama",
       "adapter": "openai-compatible",
       "model": "qwen3:8b",
       "mode": "interactive",
@@ -82,7 +230,8 @@
     },
     {
       "id": "openrouter-byok",
-      "label": "OpenRouter BYOK (example)",
+      "group": "Local / BYOK (examples)",
+      "label": "OpenRouter BYOK",
       "adapter": "openai-compatible",
       "model": "deepseek/deepseek-v4",
       "mode": "interactive",

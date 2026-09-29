@@ -15,6 +15,8 @@ changes: the dashboard reads each CLI's model list, and a new CLI needs one adap
 
 ![Scramble panel: level, own moves, own cube, full random](docs/images/scramble-panel.png)
 
+![Four login-based models racing: GPT-6 Astra (Pi and Hermes), GPT-5.6 Sol and DeepSeek 3.2 via Kiro](docs/images/arena-multi-model.png)
+
 ## Quick start
 
 Requires Node ≥ 22.
@@ -42,17 +44,29 @@ RUBIK_E2E_ADAPTER=kiro-cli RUBIK_E2E_MODEL=claude-opus-5.5 npm run test:e2e
 
 ## Model sources
 
-| Source | Auth | Example model id | Notes |
-|---|---|---|---|
-| `pi` | your Pi logins | `kiro/claude-opus-5-5`, `kiro/gpt-5-6-sol`, `kiro/deepseek-3-2`, `openai-codex/…` | Run `pi --list-models` to see everything you can use. Thinking levels: off…max. |
-| `kiro-cli` | your Kiro login | `claude-opus-5.5`, `claude-sonnet-5`, `gpt-5.6-terra` | Uses `--agent-engine v3` (v2 silently switches to `auto`). Reports credits. |
-| `openai-compatible` | env var named in `apiKeyEnv` | any | OpenAI, OpenRouter, DeepSeek, Groq, vLLM, LM Studio, Ollama (`http://127.0.0.1:11434/v1`). |
-| `kociemba` | none | — | Two-phase solver (cubejs). Reference for speed and move count. |
-| `random` | none | — | Random moves. The floor any model should beat. |
+All of these use a login you already have. **No API key is needed** except for the BYOK row.
 
-Presets live in [`config/contestants.json`](config/contestants.json). To add Codex CLI, Claude Code, Gemini CLI,
-Hermes, OpenCode or another CLI, see [docs/adding-a-model.md](docs/adding-a-model.md). The headless flags for each
-of these are already recorded there.
+| Source | Login used | Example model ids (checked 2026-09-29) |
+|---|---|---|
+| `pi` → `openai-codex/…` | ChatGPT / Codex subscription (in Pi) | `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.5` |
+| `pi` → `kiro/…` | Kiro | `claude-opus-5-5`, `claude-opus-5`, `claude-sonnet-5`, `gpt-5-6-sol`, `gpt-5-6-terra`, `gpt-5-6-luna`, `deepseek-3-2`, `glm-5`, `qwen3-coder-next`, `minimax-m2-5` |
+| `pi` → `antigravity/…` | Google Antigravity | `gemini-3.1-pro`, `gemini-3.8-flash`, `claude-opus-4-6`, `gpt-oss-120b` |
+| `hermes` | Hermes Agent login (e.g. ChatGPT/Codex, provider `openai-codex`) | `gpt-6-astra`, `gpt-5.6-luna` |
+| `kiro-cli` | Kiro | `claude-opus-5.5`, `claude-sonnet-5`, `gpt-5.6-terra` (reports credits) |
+| `openai-compatible` | env var named in `apiKeyEnv`, or none for local servers | Ollama (`http://127.0.0.1:11434/v1`), OpenRouter, DeepSeek, vLLM, LM Studio |
+| `kociemba`, `random` | none | baselines |
+
+`pi --list-models` shows every model your Pi logins can reach. Pi provider extensions (Kiro, Antigravity, …) are
+found automatically from `~/.pi/agent/settings.json`, so a newly installed provider shows up without code
+changes. Presets are in [`config/contestants.json`](config/contestants.json) and grouped by login in the
+dashboard. To add another CLI, see [docs/adding-a-model.md](docs/adding-a-model.md).
+
+Not usable on this machine right now:
+
+- Codex CLI and Claude Code are not logged in.
+- Gemini CLI personal tier was retired by Google; use Antigravity instead.
+- The OpenCode free model returned 401.
+- Pi's `nvidia/…` models did not answer within 180 s.
 
 ## Choosing the scramble
 
@@ -94,16 +108,27 @@ effort level the CLI reports back.
 
 ## First results (2026-09-29, this machine)
 
-| Contestant | Scramble | Mode | Result | Time | Turns | Moves | Tokens in/out | Cost |
-|---|---|---|---|---|---|---|---|---|
-| Pi → Kiro Claude Opus 5.5, thinking high | seed 2026, depth 3 (`F D' U`) | interactive | solved | 22.7 s | 1 | 3 | 8 517 / 191 | — |
-| Kiro CLI Claude Opus 5.5 (reported effort: medium) | seed 2026, depth 3 | interactive | solved | 56.3 s | 1 | 3 | — | 1.15 credits |
-| Pi → Kiro Claude Opus 5.5, thinking high | seed 7, depth 5 (`U B2 D' F D2`) | interactive | solved | 873 s | 6 | 47 | 111 935 / 11 319 | — |
-| Kociemba baseline | seed 2026, depth 3 | — | solved | 9 ms | 1 | 10 | — | — |
+| Contestant | Scramble | Result | Time | Turns | Moves | Tokens in/out |
+|---|---|---|---|---|---|---|
+| GPT-6 Astra · high (Pi → ChatGPT/Codex) | seed 2026, depth 3 (`F D' U`) | solved | 34.6 s | 1 | 3 | 528 / 907 |
+| GPT-6 Astra · high (Hermes → ChatGPT/Codex) | same | solved | 36.3 s | 1 | 3 | 6 652 / 954 |
+| Claude Opus 5.5 · high (Pi → Kiro) | same | solved | 20.5 s | 1 | 3 | 8 540 / 165 |
+| Claude Opus 5.5 (kiro-cli, effort reported medium) | same | solved | 38.5 s | 1 | 3 | 0.78 credits |
+| GPT-5.6 Sol · high (Pi → Kiro) | same | solved | 149.5 s | 2 | 5 | 14 200 / 19 |
+| DeepSeek 3.2 · high (Pi → Kiro) | same | not solved (30 turns) | 126.2 s | 30 | 51 | 134 258 / 874 |
+| Claude Opus 5.5 · high (Pi → Kiro) | seed 7, depth 5 (`U B2 D' F D2`) | solved | 873 s | 6 | 47 | 111 935 / 11 319 |
+| Claude Opus 5.5 · high (Pi → Kiro) | Hard, seed 109063, depth 8 | solved | 1 332 s | 13 | 99 | 199 319 / 18 254 |
+| Claude Opus 5 (Pi → Kiro, default thinking) | same | timed out at 1 800 s (best distance 8) | 1 800 s | 3 | 29 | 132 350 / 21 317 |
+| Claude Opus 5.5 · high (Pi → Kiro) | **Full random**, seed 2026 (Kociemba: 21 moves) | solved | 912 s | 10 | 71 | 142 425 / 11 556 |
+| Kociemba baseline | seed 2026, depth 3 | solved | 4 ms | 1 | 10 | — |
 
-These are single runs (n = 1) and show that the pipeline works; they are not a statistically valid ranking. In the
-depth-5 run, the model's first move made the cube worse (distance went from 5 to ≤22). Over the next five turns,
-using the state feedback, it worked back down to solved.
+Each row is a single run (n = 1). The table shows the pipeline works; it is not a ranking. GPT-5.6 Sol's first turn
+made a wrong move, which it corrected on turn 2. DeepSeek 3.2 used all 30 turns: it applied 237 moves, got within
+3 moves of solved, but never finished.
+
+With state feedback in interactive mode, Claude Opus 5.5 solved even a fully random cube. The literature reports
+0% on long-horizon one-shot tasks, so the interactive result shows how much per-turn feedback matters; single runs
+cannot quantify the effect.
 
 ## Security model
 
@@ -112,7 +137,9 @@ using the state feedback, it worked back down to solved.
 - CLIs are started **without a shell** (arguments passed as an array) in a fresh empty temp directory, with tools
   disabled:
   - Pi: `--no-tools --no-skills --no-context-files --no-extensions --no-session`
-  - Kiro: `--trust-tools=`
+  - Kiro: `--trust-tools=`. An answer that attempted a tool call is rejected.
+  - Hermes: `-t clarify`. An empty `-t ""` falls back to your configured tools; in a test that config wrote a
+    file into `$HOME`.
 
   Flags such as `--yolo`, `--trust-all-tools` or `--dangerously-*` are never used. A timeout or cancel sends
   SIGTERM, then SIGKILL.

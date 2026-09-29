@@ -49,6 +49,8 @@ export type Contestant = ModelClient | Solver;
 export interface ContestantConfig {
   id: string;
   label: string;
+  /** UI grouping for presets (e.g. "Kiro login"); informational only. */
+  group?: string;
   adapter: string;
   model?: string;
   /** Thinking/effort level passed to the adapter (e.g. "high"). */

@@ -1,5 +1,6 @@
 import type { Contestant, ContestantConfig } from "@rubik-arena/bench-core";
 import { KociembaSolver, RandomSolver } from "./baselines.ts";
+import { HermesClient } from "./hermes.ts";
 import { KiroClient, parseKiroModelList } from "./kiro.ts";
 import { OpenAICompatibleClient } from "./openai.ts";
 import { PiClient, parsePiModelList } from "./pi.ts";
@@ -96,6 +97,20 @@ const DEFINITIONS: AdapterDefinition[] = [
       });
       return parseKiroModelList(r.stdout);
     },
+  },
+  {
+    id: "hermes",
+    name: "Hermes Agent",
+    kind: "cli",
+    auth: "cli-login",
+    description:
+      "Runs `hermes -z` one-shot with only the harmless `clarify` toolset, using your Hermes login (e.g. ChatGPT/Codex subscription). Set options.provider (e.g. openai-codex).",
+    thinkingLevels: ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+    modelHint: "gpt-6-astra",
+    browserCapable: false,
+    create: (c) =>
+      new HermesClient({ model: requireModel(c), provider: str(c.options?.provider), reasoning: c.thinking }),
+    detect: cliDetect(process.env.RUBIK_HERMES_BIN ?? "hermes"),
   },
   {
     id: "openai-compatible",

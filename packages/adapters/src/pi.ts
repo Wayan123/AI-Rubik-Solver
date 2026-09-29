@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { CompletionRequest, CompletionResponse, ModelClient } from "@rubik-arena/bench-core";
@@ -38,6 +38,71 @@ export function piAgentDir(): string {
   return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 }
 
+/**
+ * Installed Pi package directories from `settings.json` (npm and git sources), e.g.
+ * `npm:pi-provider-kiro` → `<agent>/npm/node_modules/pi-provider-kiro`,
+ * `git:github.com/owner/repo@ref` → `<agent>/git/github.com/owner/repo`.
+ */
+export function installedPiPackages(agentDir = piAgentDir()): string[] {
+  let sources: unknown[] = [];
+  try {
+    const settings = JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")) as {
+      packages?: unknown[];
+    };
+    sources = settings.packages ?? [];
+  } catch {
+    return [];
+  }
+  const dirs: string[] = [];
+  for (const entry of sources) {
+    const src = typeof entry === "string" ? entry : (entry as { source?: unknown })?.source;
+    if (typeof src !== "string") continue;
+    if (src.startsWith("npm:")) {
+      const name = src.slice(4).replace(/(?<=.)@[^/]*$/, "");
+      dirs.push(join(agentDir, "npm", "node_modules", name));
+    } else if (src.startsWith("git:")) {
+      dirs.push(join(agentDir, "git", src.slice(4).replace(/@[^/]*$/, "")));
+    }
+  }
+  return dirs.filter((d) => existsSync(d));
+}
+
+/** Does this package register the given provider id? Checks `pi-provider-<id>` naming, then source text. */
+function packageProvides(dir: string, provider: string): boolean {
+  if (dir.endsWith(`pi-provider-${provider}`) || dir.endsWith(`pi-${provider}`)) return true;
+  const needles = [
+    `registerProvider("${provider}"`,
+    `registerProvider('${provider}'`,
+    `PROVIDER_ID = "${provider}"`,
+  ];
+  const stack = [dir];
+  let scanned = 0;
+  while (stack.length && scanned < 400) {
+    const d = stack.pop()!;
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(d, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (e.name === "node_modules" || e.name.startsWith(".")) continue;
+      const p = join(d, e.name);
+      if (e.isDirectory()) stack.push(p);
+      else if (/\.(ts|js|mjs)$/.test(e.name)) {
+        scanned++;
+        try {
+          const text = readFileSync(p, "utf8");
+          if (needles.some((n) => text.includes(n))) return true;
+        } catch {}
+      }
+    }
+  }
+  return false;
+}
+
+const providerCache = new Map<string, string[]>();
+
 /** Resolve extension paths for a non-built-in provider (e.g. `kiro` → `…/npm/node_modules/pi-provider-kiro`). */
 export function resolveProviderExtensions(model: string, explicit?: string[]): string[] {
   if (explicit?.length) return explicit;
@@ -45,8 +110,16 @@ export function resolveProviderExtensions(model: string, explicit?: string[]): s
   if (fromEnv?.length) return fromEnv;
   const provider = model.includes("/") ? model.split("/")[0]! : "";
   if (!provider || BUILTIN_PROVIDERS.has(provider)) return [];
+  const cached = providerCache.get(provider);
+  if (cached) return cached;
   const candidate = join(piAgentDir(), "npm", "node_modules", `pi-provider-${provider}`);
-  return existsSync(candidate) ? [candidate] : [];
+  const found = existsSync(candidate)
+    ? [candidate]
+    : installedPiPackages()
+        .filter((d) => packageProvides(d, provider))
+        .slice(0, 1);
+  providerCache.set(provider, found);
+  return found;
 }
 
 /**
@@ -131,7 +204,7 @@ export function piResponse(state: PiParseState): CompletionResponse {
 export class PiClient implements ModelClient {
   readonly kind = "llm" as const;
   constructor(readonly opts: PiOptions) {
-    if (!/^[\w.-]+\/[\w.:-]+$/.test(opts.model))
+    if (!/^[\w.-]+(\/[\w.:-]+){1,3}$/.test(opts.model))
       throw new Error(`pi model must be "provider/model", got "${opts.model}"`);
   }
 

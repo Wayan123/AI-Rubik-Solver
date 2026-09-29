@@ -9,11 +9,15 @@ import { applyMoves, SOLVED } from "@rubik-arena/cube-engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   adapterInfos,
+  buildHermesArgs,
   buildKiroArgs,
   buildPiArgs,
   createContestant,
   feedKiroLine,
   feedPiLine,
+  HERMES_SAFE_TOOLSET,
+  HermesClient,
+  hermesResponse,
   KiroClient,
   kiroResponse,
   newKiroState,
@@ -233,6 +237,22 @@ describe("kiro-cli adapter", () => {
     expect(() => kiroResponse(state, "claude-opus-5.5")).toThrow('used model "auto"');
   });
 
+  it("rejects answers where the model tried to use tools", () => {
+    const state = newKiroState();
+    feedKiroLine(
+      state,
+      JSON.stringify({
+        type: "sessionUpdate",
+        data: { update: { sessionUpdate: "tool_call", title: "Write File" } },
+      }),
+    );
+    feedKiroLine(
+      state,
+      JSON.stringify({ type: "runFinished", data: { status: "success", finalText: "{}" } }),
+    );
+    expect(() => kiroResponse(state, "claude-opus-5.5")).toThrow("tried to use tools (Write File)");
+  });
+
   it("parses --list-models json", () => {
     expect(parseKiroModelList('{"models":[{"model_id":"auto"},{"model_id":"claude-opus-5.5"}]}')).toEqual([
       "auto",
@@ -365,6 +385,7 @@ describe("registry", () => {
     expect(adapterInfos().map((a) => a.id)).toEqual([
       "pi",
       "kiro-cli",
+      "hermes",
       "openai-compatible",
       "kociemba",
       "random",
@@ -384,5 +405,98 @@ describe("registry", () => {
     expect(k.kind).toBe("solver");
     expect(() => createContestant({ ...base, adapter: "nope" })).toThrow("unknown adapter");
     expect(() => createContestant({ ...base, adapter: "pi" })).toThrow("needs a model");
+  });
+});
+
+describe("hermes adapter", () => {
+  it("argv uses one-shot mode with only the clarify toolset (never empty -t)", () => {
+    const args = buildHermesArgs(
+      { model: "gpt-6-astra", provider: "openai-codex", reasoning: "high" },
+      req,
+      "/tmp/u.json",
+    );
+    expect(args[0]).toBe("-z");
+    expect(args[1]).toContain("SYS");
+    expect(args[1]).toContain("USER");
+    expect(args.slice(args.indexOf("-t"), args.indexOf("-t") + 2)).toEqual(["-t", HERMES_SAFE_TOOLSET]);
+    expect(HERMES_SAFE_TOOLSET).toBe("clarify");
+    expect(args).toContain("--ignore-rules");
+    expect(args).not.toContain("--yolo");
+    expect(args.slice(args.indexOf("--provider"), args.indexOf("--provider") + 2)).toEqual([
+      "--provider",
+      "openai-codex",
+    ]);
+    expect(args.slice(args.indexOf("--reasoning"), args.indexOf("--reasoning") + 2)).toEqual([
+      "--reasoning",
+      "high",
+    ]);
+  });
+
+  it("parses stdout and the usage report", () => {
+    const r = hermesResponse('{"moves":["R","U"]}\n', {
+      input_tokens: 17050,
+      output_tokens: 12,
+      estimated_cost_usd: 0,
+      model: "gpt-6-astra",
+      provider: "openai-codex",
+      failed: false,
+    });
+    expect(r).toEqual({
+      text: '{"moves":["R","U"]}',
+      usage: { tokensIn: 17050, tokensOut: 12 },
+      cost: undefined,
+      model: "openai-codex/gpt-6-astra",
+    });
+  });
+
+  it("fails on a failed run or empty answer", () => {
+    expect(() => hermesResponse("x", { failed: true, turn_exit_reason: "auth" })).toThrow(
+      "hermes run failed: auth",
+    );
+    expect(() => hermesResponse("  ", undefined)).toThrow("no answer");
+  });
+
+  it("validates model and provider", () => {
+    expect(() => new HermesClient({ model: "gpt; rm -rf /" })).toThrow();
+    expect(() => new HermesClient({ model: "gpt-6-astra", provider: "a b" })).toThrow();
+  });
+});
+
+describe("pi provider discovery", () => {
+  it("finds provider extensions from settings.json packages (npm and git)", async () => {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const agent = await mkdtemp(join(tmpdir(), "ra-agent-"));
+    await mkdir(join(agent, "npm", "node_modules", "pi-provider-kiro"), { recursive: true });
+    const git = join(agent, "git", "github.com", "someone", "pi-antigravity", "src");
+    await mkdir(git, { recursive: true });
+    await writeFile(
+      join(git, "index.ts"),
+      'const PROVIDER_ID = "antigravity";\npi.registerProvider(PROVIDER_ID, {});\n',
+    );
+    await writeFile(
+      join(agent, "settings.json"),
+      JSON.stringify({
+        packages: ["npm:pi-provider-kiro", "git:github.com/someone/pi-antigravity@v1", "npm:missing"],
+      }),
+    );
+    const prev = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agent;
+    try {
+      const { installedPiPackages } = await import("../src/pi.ts");
+      expect(installedPiPackages(agent)).toHaveLength(2);
+      expect(resolveProviderExtensions("antigravity/gemini-3.1-pro")[0]).toContain("pi-antigravity");
+      expect(resolveProviderExtensions("kiro/claude-opus-5-5")[0]).toContain("pi-provider-kiro");
+      expect(resolveProviderExtensions("openai-codex/gpt-6-astra")).toEqual([]);
+      expect(resolveProviderExtensions("unknownprov/x")).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = prev;
+      await rm(agent, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts nested model ids like nvidia/z-ai/glm-5.3", () => {
+    expect(() => new PiClient({ model: "nvidia/z-ai/glm-5.3" })).not.toThrow();
+    expect(() => new PiClient({ model: "a/b/c/d/e" })).toThrow();
   });
 });

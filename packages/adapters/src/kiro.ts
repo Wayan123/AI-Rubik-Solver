@@ -39,9 +39,16 @@ export interface KiroParseState {
   effort?: string;
   credits: number;
   sawChunk: boolean;
+  /** Tool calls the model attempted (all are refused by `--trust-tools=`, but they are recorded). */
+  toolCalls: string[];
 }
 
-export const newKiroState = (): KiroParseState => ({ chunks: [], credits: 0, sawChunk: false });
+export const newKiroState = (): KiroParseState => ({
+  chunks: [],
+  credits: 0,
+  sawChunk: false,
+  toolCalls: [],
+});
 
 /** Feed one stream-json line. Returns true on the first text chunk. */
 export function feedKiroLine(state: KiroParseState, line: string): boolean {
@@ -52,6 +59,7 @@ export function feedKiroLine(state: KiroParseState, line: string): boolean {
       finalText?: string;
       update?: {
         sessionUpdate?: string;
+        title?: string;
         content?: { type?: string; text?: string };
         configOptions?: Array<{ id: string; currentValue?: string }>;
         _meta?: { kiro?: { kind?: string; promptTurnSummaries?: Array<{ unit?: string; usage?: number }> } };
@@ -82,6 +90,10 @@ export function feedKiroLine(state: KiroParseState, line: string): boolean {
     state.sawChunk = true;
     return first;
   }
+  if (u.sessionUpdate === "tool_call") {
+    state.toolCalls.push(u.title ?? "tool");
+    return false;
+  }
   if (u.sessionUpdate === "config_option_update") {
     for (const c of u.configOptions ?? []) {
       if (c.id === "model") state.model = c.currentValue;
@@ -97,6 +109,12 @@ export function feedKiroLine(state: KiroParseState, line: string): boolean {
 
 export function kiroResponse(state: KiroParseState, requestedModel: string): CompletionResponse {
   if (state.status && state.status !== "success") throw new CliError(`kiro-cli run status: ${state.status}`);
+  if (state.toolCalls.length) {
+    // Refused by --trust-tools=, but a benchmark answer must not depend on tools; fail loudly.
+    throw new CliError(
+      `model tried to use tools (${[...new Set(state.toolCalls)].join(", ")}); all were refused`,
+    );
+  }
   const text = state.finalText ?? state.chunks.join("");
   if (state.model && state.model !== requestedModel) {
     throw new CliError(`kiro-cli used model "${state.model}" instead of "${requestedModel}"`);

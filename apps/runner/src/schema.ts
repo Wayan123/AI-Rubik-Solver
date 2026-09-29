@@ -15,12 +15,13 @@ const SECRET_KEY = /(^|_)(api_?key|key|token|secret|password|authorization)$/i;
 export const contestantSchema = z.object({
   id: safeId,
   label: z.string().min(1).max(80),
+  group: z.string().max(60).optional(),
   adapter: safeId,
   model: z
     .string()
     .regex(/^[\w./:-]{1,120}$/)
     .optional(),
-  thinking: z.enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
+  thinking: z.enum(["off", "none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
   mode: z.enum(["one-shot", "interactive"]).default("interactive"),
   maxTurns: z.number().int().min(1).max(200).default(30),
   maxMovesPerTurn: z.number().int().min(1).max(50).default(10),
