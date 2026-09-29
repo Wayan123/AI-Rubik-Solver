@@ -1,11 +1,25 @@
-import { memo } from "react";
+import { applyMoves, type CubeState } from "@rubik-arena/cube-engine";
+import { memo, useMemo } from "react";
+import { completedTurn, type LaneCursor, type LaneTimeline } from "../replay.ts";
 import { formatCost, formatDuration, type LaneState, laneElapsedMs } from "../state.ts";
 import { Cube3D } from "./Cube3D.tsx";
+import { ReplayControls } from "./ReplayControls.tsx";
 import { Sparkline } from "./Sparkline.tsx";
+
+export interface LaneReplay {
+  timeline: LaneTimeline;
+  cursor: LaneCursor;
+  initialState: CubeState;
+  onToggle: () => void;
+  onStep: (delta: number) => void;
+  onSeek: (pos: number) => void;
+}
 
 export const STATUS_LABEL: Record<string, string> = {
   pending: "Waiting",
   running: "Solving",
+  replay: "Replaying",
+  paused: "Paused",
   solved: "Solved",
   unsolved: "Not solved",
   error: "Error",
@@ -22,13 +36,30 @@ function Stat({ label, value, title }: { label: string; value: string; title?: s
   );
 }
 
-function LaneImpl({ lane, now }: { lane: LaneState; now: number }) {
+function LaneImpl({ lane, now, replay }: { lane: LaneState; now: number; replay?: LaneReplay }) {
   const r = lane.result;
-  const lastTurn = lane.turns.at(-1);
-  const distance = lastTurn?.distanceAfter ?? r?.finalDistance;
-  const initial = r?.initialDistance.value ?? lane.distance[0];
-  const waiting = lane.waitingSinceClient !== undefined ? now - lane.waitingSinceClient : undefined;
   const c = lane.config;
+
+  // In replay, everything below reflects the replay position instead of the final result.
+  const pos = replay ? Math.floor(replay.cursor.pos) : lane.movesApplied.length;
+  const replayMoves = useMemo(() => (replay ? replay.timeline.moves.slice(0, pos) : null), [replay, pos]);
+  const replayState = useMemo(
+    () => (replay && replayMoves ? applyMoves(replay.initialState, replayMoves) : null),
+    [replay, replayMoves],
+  );
+  const shownTurns = replay ? lane.turns.slice(0, completedTurn(replay.timeline, pos) + 1) : lane.turns;
+  const lastTurn = shownTurns.at(-1);
+  const distance = replay
+    ? pos === 0
+      ? r?.initialDistance
+      : (lastTurn?.distanceAfter ?? r?.initialDistance)
+    : (lastTurn?.distanceAfter ?? r?.finalDistance);
+  const initial = r?.initialDistance.value ?? lane.distance[0];
+  const sparkValues = replay ? shownTurns.map((t) => t.distanceAfter.value) : lane.distance;
+  const replayDone = replay ? pos >= replay.timeline.moves.length && !replay.cursor.playing : false;
+  const waiting =
+    !replay && lane.waitingSinceClient !== undefined ? now - lane.waitingSinceClient : undefined;
+  const badge = replay && !replayDone ? (replay.cursor.playing ? "replay" : "paused") : lane.status;
 
   return (
     <article className={`lane status-${lane.status}`} aria-labelledby={`lane-${c.id}`}>
@@ -41,17 +72,31 @@ function LaneImpl({ lane, now }: { lane: LaneState; now: number }) {
             {c.thinking ? ` · ${c.thinking}` : ""} · {c.mode}
           </p>
         </div>
-        <span className={`badge badge-${lane.status}`}>{STATUS_LABEL[lane.status] ?? lane.status}</span>
+        <span className={`badge badge-${badge}`}>{STATUS_LABEL[badge] ?? badge}</span>
       </header>
 
       <Cube3D
-        label={`${c.label} cube, ${STATUS_LABEL[lane.status] ?? lane.status}`}
-        state={lane.state}
-        moves={lane.movesApplied}
+        label={`${c.label} cube, ${replay ? `replay move ${pos}` : (STATUS_LABEL[lane.status] ?? lane.status)}`}
+        state={replayState ?? lane.state}
+        moves={replayMoves ?? lane.movesApplied}
       />
 
+      {replay && (
+        <ReplayControls
+          laneLabel={c.label}
+          timeline={replay.timeline}
+          cursor={replay.cursor}
+          onToggle={replay.onToggle}
+          onStep={replay.onStep}
+          onSeek={replay.onSeek}
+        />
+      )}
+
       <div className="timer" aria-live="off">
-        <span className="timer-value">{formatDuration(laneElapsedMs(lane, now))}</span>
+        <span className="timer-value">
+          {formatDuration(replay ? replay.cursor.clock : laneElapsedMs(lane, now))}
+        </span>
+        {replay && r && <span className="timer-sub">of {formatDuration(r.wallMs)}</span>}
         {waiting !== undefined && (
           <span className="timer-sub">
             turn {lane.currentTurn} · thinking {formatDuration(waiting)}
@@ -60,8 +105,8 @@ function LaneImpl({ lane, now }: { lane: LaneState; now: number }) {
       </div>
 
       <dl className="stats">
-        <Stat label="Turns" value={String(lane.turns.length)} />
-        <Stat label="Moves" value={String(lane.movesApplied.length)} />
+        <Stat label="Turns" value={String(shownTurns.length)} />
+        <Stat label="Moves" value={String(pos)} />
         <Stat
           label="Distance"
           value={distance ? `${distance.exact ? "" : "≤"}${distance.value}` : "—"}
@@ -92,9 +137,9 @@ function LaneImpl({ lane, now }: { lane: LaneState; now: number }) {
         <Stat label="Cost" value={r?.cost.length ? formatCost(r.cost) : "—"} />
       </dl>
 
-      {lane.distance.length > 0 && initial !== undefined && (
+      {sparkValues.length > 0 && initial !== undefined && (
         <Sparkline
-          values={[initial, ...lane.distance]}
+          values={[initial, ...sparkValues]}
           label={`Distance to solved over turns for ${c.label}`}
         />
       )}

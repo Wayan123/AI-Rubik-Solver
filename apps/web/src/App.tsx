@@ -3,8 +3,9 @@ import { formatMoves } from "@rubik-arena/cube-engine";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { type AdapterStatus, bootstrapToken, type RaceSummary, RunnerApi } from "./api.ts";
 import { ContestantEditor } from "./components/ContestantEditor.tsx";
-import { Lane } from "./components/Lane.tsx";
+import { Lane, type LaneReplay } from "./components/Lane.tsx";
 import { Leaderboard } from "./components/Leaderboard.tsx";
+import { ReplayToolbar } from "./components/ReplayToolbar.tsx";
 import {
   DEFAULT_DRAFT,
   inputOf,
@@ -13,6 +14,7 @@ import {
   ScramblePanel,
 } from "./components/ScramblePanel.tsx";
 import { DEMO_ADAPTERS, runDemoRace } from "./demo.ts";
+import { anyPlaying, buildTimeline, type LaneTimeline, replayReducer } from "./replay.ts";
 import { emptyView, formatDuration, type RaceView, reduceRace } from "./state.ts";
 
 type Connection =
@@ -123,6 +125,7 @@ export function App() {
   const [draft, setDraft] = useState<ScrambleDraft>(DEFAULT_DRAFT);
   const [concurrency, setConcurrency] = useState(1);
   const [view, dispatch] = useReducer(eventReducer, emptyView);
+  const [replay, replayDispatch] = useReducer(replayReducer, null);
   const [raceId, setRaceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<RaceSummary[]>([]);
@@ -196,6 +199,7 @@ export function App() {
     );
     if (blocked) return setError(`“${blocked.label}” needs the local runner. Start it with npm start.`);
     dispatch({ reset: true });
+    replayDispatch({ type: "close" });
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setNow(Date.now());
@@ -235,6 +239,7 @@ export function App() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     dispatch({ reset: true });
+    replayDispatch({ type: "close" });
     setRaceId(id);
     try {
       await api.streamEvents(id, onEvent, ctrl.signal);
@@ -264,7 +269,61 @@ export function App() {
     setContestants((cs) => [...cs, { ...base, id: newId(), label: preset ? preset.label : base.label }]);
   };
 
-  const lanes = view.order.map((id) => view.lanes[id]!).filter(Boolean);
+  const lanes = useMemo(() => view.order.map((id) => view.lanes[id]!).filter(Boolean), [view]);
+  const finished = view.status === "finished" || view.status === "cancelled";
+
+  // Rebuild timelines only when a different race finishes (not on every re-render).
+  const resultsKey = finished
+    ? `${view.race?.id}:${lanes.map((l) => `${l.config.id}=${l.result?.movesApplied.length ?? -1}`).join(",")}`
+    : "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on resultsKey on purpose
+  const timelines = useMemo(() => {
+    if (!finished) return null;
+    const out: Record<string, LaneTimeline> = {};
+    for (const l of lanes) {
+      if (l.result)
+        out[l.config.id] = buildTimeline({
+          turns: l.result.turns,
+          movesApplied: l.result.movesApplied,
+          wallMs: l.result.wallMs,
+        });
+    }
+    return out;
+  }, [resultsKey]);
+
+  // A finished race (live or from history) opens in replay mode at its final position.
+  useEffect(() => {
+    if (timelines) replayDispatch({ type: "open", timelines });
+  }, [timelines]);
+
+  // Drive playback with requestAnimationFrame while anything is playing.
+  const playing = anyPlaying(replay);
+  useEffect(() => {
+    if (!playing) return;
+    let frame = 0;
+    let last = performance.now();
+    const loop = (t: number) => {
+      replayDispatch({ type: "tick", dtMs: Math.min(250, t - last) });
+      last = t;
+      frame = requestAnimationFrame(loop);
+    };
+    frame = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(frame);
+  }, [playing]);
+
+  const replayFor = (id: string): LaneReplay | undefined => {
+    const timeline = replay?.timelines[id];
+    const cursor = replay?.cursors[id];
+    if (!timeline || !cursor || !view.initialState) return undefined;
+    return {
+      timeline,
+      cursor,
+      initialState: view.initialState,
+      onToggle: () => replayDispatch({ type: "toggle", id }),
+      onStep: (delta) => replayDispatch({ type: "step", id, delta }),
+      onSeek: (pos) => replayDispatch({ type: "seek", id, pos }),
+    };
+  };
 
   return (
     <div className="app">
@@ -424,11 +483,24 @@ export function App() {
               </p>
             </div>
           ) : (
-            <div className="lanes">
-              {lanes.map((l) => (
-                <Lane key={l.config.id} lane={l} now={now} />
-              ))}
-            </div>
+            <>
+              {replay && (
+                <ReplayToolbar
+                  state={replay}
+                  onPlayAll={() => replayDispatch({ type: "play", ids: "all", restart: true })}
+                  onResumeAll={() => replayDispatch({ type: "play", ids: "all" })}
+                  onPauseAll={() => replayDispatch({ type: "pause", ids: "all" })}
+                  onShowFinal={() => replayDispatch({ type: "open", timelines: replay.timelines })}
+                  onMode={(mode) => replayDispatch({ type: "mode", mode })}
+                  onSpeed={(speed) => replayDispatch({ type: "speed", ...speed })}
+                />
+              )}
+              <div className="lanes">
+                {lanes.map((l) => (
+                  <Lane key={l.config.id} lane={l} now={now} replay={replayFor(l.config.id)} />
+                ))}
+              </div>
+            </>
           )}
           <Leaderboard lanes={lanes} now={now} />
 

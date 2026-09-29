@@ -86,6 +86,24 @@ unfolded start cube and how far it is from solved (exact up to 6 moves, otherwis
 API: `POST /api/races` with `scramble: { source: "seeded" | "moves" | "state" | "random-state", seed?, depth?, moves?, state? }`.
 Older clients that send only `moves` or `seed`/`depth` still work.
 
+## Replay
+
+A finished race (live, or opened from **History**) switches to replay mode, showing each cube's final position.
+
+- **Replay all from start** plays every contestant simultaneously from the scrambled cube to the end. Next to it
+  are **Pause all**, **Resume all** and **Show final**.
+- Each lane has its own controls: restart, previous move, play/pause, next move, and a slider to jump to any move.
+  Lanes can be played one at a time, independently of the others.
+- Pacing:
+  - **Real time**: each move appears when the model actually answered (turn start + latency). The replay
+    reproduces the race, so faster models finish first. Speed 1×–300×.
+  - **Move by move**: every lane advances at the same rate (0.5–16 moves/s), which compares the solution
+    paths side by side.
+- While replaying, the timer, turns, moves, distance and sparkline follow the replay position. The status line
+  shows the current move, the previous moves and the next one.
+
+![Replay: all lanes in sync on the real race clock](docs/images/replay.png)
+
 ## How a race works
 
 1. You pick the start cube (see above). Every contestant gets exactly the same state.

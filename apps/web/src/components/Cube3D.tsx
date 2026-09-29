@@ -106,7 +106,7 @@ function CubeModel({ state, moves, speed = 0.22, reducedMotion }: CubeProps) {
       queue.current.push(...moves.slice(known.current));
       known.current = moves.length;
     } else if (moves.length < known.current) {
-      // New race or replay scrub backwards: snap.
+      // Replay scrub or restart: snap to the new state (the queue belongs to the old position).
       queue.current = [];
       known.current = moves.length;
       setAnimation(null);
