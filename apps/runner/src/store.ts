@@ -21,6 +21,9 @@ export interface RaceSummary {
   createdAt: string;
   status: RaceStatus;
   scrambleDepth: number;
+  scrambleSource: string;
+  /** Exact or upper-bound distance of the start state, from the first result when available. */
+  startDistance?: { value: number; exact: boolean };
   contestants: Array<{ label: string; status: string; wallMs: number; progress: number; solved: boolean }>;
 }
 
@@ -68,6 +71,8 @@ export class RaceStore {
         createdAt: r.race.createdAt,
         status: r.status,
         scrambleDepth: r.race.scramble.moves.length,
+        scrambleSource: r.race.scramble.source ?? (r.race.scramble.moves.length ? "moves" : "seeded"),
+        startDistance: r.results[0]?.initialDistance,
         contestants: r.race.contestants.map((c) => {
           const res = r.results.find((x) => x.contestantId === c.id);
           return {

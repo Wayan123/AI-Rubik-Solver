@@ -1,5 +1,5 @@
 import type { ContestantConfig, RaceConfig, RaceEvent } from "@rubik-arena/bench-core";
-import type { CubeState, Move } from "@rubik-arena/cube-engine";
+import type { CubeState, Move, ScrambleSource } from "@rubik-arena/cube-engine";
 
 const TOKEN_KEY = "rubik-arena-token";
 
@@ -34,11 +34,19 @@ export interface RaceSummary {
   createdAt: string;
   status: string;
   scrambleDepth: number;
+  scrambleSource?: string;
+  startDistance?: { value: number; exact: boolean };
   contestants: Array<{ label: string; status: string; wallMs: number; progress: number; solved: boolean }>;
 }
 
 export interface CreateRace {
-  scramble: { seed: number; depth: number; moves?: Move[] };
+  scramble: {
+    source: ScrambleSource;
+    seed?: number;
+    depth?: number;
+    moves?: Move[];
+    state?: string;
+  };
   concurrency: number;
   contestants: ContestantConfig[];
 }

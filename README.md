@@ -13,6 +13,8 @@ changes: the dashboard reads each CLI's model list, and a new CLI needs one adap
 
 ![Rubik Arena: Claude Opus 5.5 (high) vs Kociemba](docs/images/arena-first-race.png)
 
+![Scramble panel: level, own moves, own cube, full random](docs/images/scramble-panel.png)
+
 ## Quick start
 
 Requires Node ≥ 22.
@@ -52,9 +54,27 @@ Presets live in [`config/contestants.json`](config/contestants.json). To add Cod
 Hermes, OpenCode or another CLI, see [docs/adding-a-model.md](docs/adding-a-model.md). The headless flags for each
 of these are already recorded there.
 
+## Choosing the scramble
+
+You decide the starting cube. The **Scramble** panel has four sources:
+
+| Source | What you set | Use it for |
+|---|---|---|
+| **Level** | Difficulty preset (Warm-up 2, Easy 3, Medium 5, Hard 8, Expert 12, Master 20) or a custom depth of 1–100 random turns, plus a seed | Reproducible difficulty ladders |
+| **My moves** | Your own move sequence, or a pattern (T-perm, Sune, Checkerboard, Superflip) | Official WCA scrambles, hand-made tests |
+| **My cube** | The 54 stickers of a real cube, painted in a sticker editor or pasted as `URFDLB` text | Racing models on the cube in your hand |
+| **Full random** | A seed | Uniformly random reachable state, like competition scrambles (hardest) |
+
+Every input is checked before a race starts: allowed moves, 9 stickers per colour, fixed centres, twisted corners,
+flipped edges and permutation parity. An impossible cube is rejected with a readable reason. The panel shows the
+unfolded start cube and how far it is from solved (exact up to 6 moves, otherwise an upper bound).
+
+API: `POST /api/races` with `scramble: { source: "seeded" | "moves" | "state" | "random-state", seed?, depth?, moves?, state? }`.
+Older clients that send only `moves` or `seed`/`depth` still work.
+
 ## How a race works
 
-1. A seeded scramble is generated, or you paste your own. Every contestant gets exactly the same state.
+1. You pick the start cube (see above). Every contestant gets exactly the same state.
 2. Each model gets the same system prompt (`PROMPT_VERSION v1`). The prompt covers Singmaster notation, an
    unfolded net, a per-face listing and the 54-character facelet string. The model must answer with
    `{"moves": [...]}`.

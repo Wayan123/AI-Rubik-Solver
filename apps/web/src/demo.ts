@@ -6,7 +6,7 @@ import {
   runRace,
   type Solver,
 } from "@rubik-arena/bench-core";
-import { ALL_MOVES, type Move, mulberry32, scramble, solve } from "@rubik-arena/cube-engine";
+import { ALL_MOVES, type Move, mulberry32, type ResolvedScramble, solve } from "@rubik-arena/cube-engine";
 
 /** Adapters that can run fully in the browser (demo mode, no runner). */
 export const DEMO_ADAPTERS = ["kociemba", "random"] as const;
@@ -42,21 +42,15 @@ function createDemoContestant(c: ContestantConfig): Contestant {
 }
 
 export function runDemoRace(
-  input: {
-    seed: number;
-    depth: number;
-    moves?: Move[];
-    contestants: ContestantConfig[];
-    concurrency: number;
-  },
+  input: { scramble: ResolvedScramble; contestants: ContestantConfig[]; concurrency: number },
   emit: (e: RaceEvent) => void,
   signal: AbortSignal,
 ): Promise<unknown> {
-  const moves = input.moves?.length ? input.moves : scramble(input.seed, input.depth);
+  const r = input.scramble;
   const race: RaceConfig = {
     id: `demo-${Date.now()}`,
     createdAt: new Date().toISOString(),
-    scramble: { seed: input.seed, depth: moves.length, moves },
+    scramble: { source: r.source, seed: r.seed, depth: r.depth ?? 0, moves: r.moves, state: r.state },
     concurrency: input.concurrency,
     contestants: input.contestants,
   };

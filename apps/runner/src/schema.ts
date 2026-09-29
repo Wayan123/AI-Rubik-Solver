@@ -1,8 +1,6 @@
 import { MAX_CONCURRENCY } from "@rubik-arena/bench-core";
-import { ALL_MOVES, type Move } from "@rubik-arena/cube-engine";
 import { z } from "zod";
 
-const moveSchema = z.enum(ALL_MOVES as [Move, ...Move[]]);
 const safeId = z.string().regex(/^[\w.-]{1,64}$/);
 const optionValue = z.union([
   z.string().max(2000),
@@ -40,14 +38,21 @@ export const createRaceSchema = z
   .object({
     scramble: z
       .object({
+        /** Omitted: "moves" when moves are given, otherwise "seeded" (backwards compatible). */
+        source: z.enum(["seeded", "moves", "random-state", "state"]).optional(),
         seed: z
           .number()
           .int()
           .min(0)
           .max(2 ** 31 - 1)
           .default(1),
-        depth: z.number().int().min(1).max(30).default(20),
-        moves: z.array(moveSchema).max(100).optional(),
+        depth: z.number().int().min(1).max(100).default(20),
+        moves: z.array(z.string().max(4)).max(100).optional(),
+        state: z
+          .string()
+          .max(200)
+          .regex(/^[URFDLBurfdlb\s/|,]*$/, "state may only contain U R F D L B")
+          .optional(),
       })
       .default({ seed: 1, depth: 20 }),
     concurrency: z.number().int().min(1).max(MAX_CONCURRENCY).default(1),

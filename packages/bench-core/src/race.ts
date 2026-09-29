@@ -12,7 +12,7 @@ export interface RaceOptions {
 }
 
 export function initialStateOf(race: RaceConfig): CubeState {
-  return applyMoves(SOLVED, race.scramble.moves);
+  return race.scramble.state ?? applyMoves(SOLVED, race.scramble.moves);
 }
 
 /** Run every contestant on the same scramble with bounded concurrency. Results keep config order. */

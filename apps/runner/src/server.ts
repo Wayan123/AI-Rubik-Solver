@@ -11,7 +11,7 @@ import {
 import type { Contestant, ContestantConfig, RaceEvent } from "@rubik-arena/bench-core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { hostAllowed, tokenMatches } from "./auth.ts";
-import { RaceManager } from "./races.ts";
+import { RaceManager, ScrambleError } from "./races.ts";
 import { createRaceSchema } from "./schema.ts";
 import { RaceStore } from "./store.ts";
 
@@ -93,7 +93,14 @@ export async function buildServer(opts: ServerOptions): Promise<RunnerServer> {
     if (!parsed.success) return reply.code(400).send({ error: "invalid race", issues: parsed.error.issues });
     const unknown = parsed.data.contestants.find((c) => !hasAdapter(c.adapter));
     if (unknown) return reply.code(400).send({ error: `unknown adapter "${unknown.adapter}"` });
-    const record = races.start(parsed.data);
+    let record: ReturnType<typeof races.start>;
+    try {
+      record = races.start(parsed.data);
+    } catch (err) {
+      if (err instanceof ScrambleError)
+        return reply.code(400).send({ error: `invalid scramble: ${err.message}` });
+      throw err;
+    }
     return reply.code(201).send({ id: record.race.id, race: record.race, initialState: record.initialState });
   });
 

@@ -63,10 +63,15 @@ export interface ContestantConfig {
 }
 
 export interface ScrambleSpec {
-  seed: number;
+  /** Where the start cube came from; older races have no source (treated as seeded/moves). */
+  source?: "seeded" | "moves" | "random-state" | "state";
+  seed?: number;
+  /** Scramble move count when produced by moves; 0 for state-based sources. */
   depth: number;
-  /** Explicit scramble; when set, seed/depth are informational only. */
+  /** Moves from solved to the start state; empty when the user supplied a state. */
   moves: Move[];
+  /** Start state (54 facelets). When absent it is derived from `moves`. */
+  state?: CubeState;
 }
 
 export interface RaceConfig {

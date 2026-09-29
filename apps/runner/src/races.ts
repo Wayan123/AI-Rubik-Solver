@@ -9,9 +9,12 @@ import {
   rankResults,
   runRace,
 } from "@rubik-arena/bench-core";
-import { scramble as makeScramble } from "@rubik-arena/cube-engine";
+import { resolveScramble } from "@rubik-arena/cube-engine";
 import type { CreateRaceInput } from "./schema.ts";
 import type { RaceRecord, RaceStore } from "./store.ts";
+
+/** The user-supplied scramble or state is invalid (maps to HTTP 400). */
+export class ScrambleError extends Error {}
 
 type Listener = (event: RaceEvent) => void;
 
@@ -31,12 +34,20 @@ export class RaceManager {
   ) {}
 
   start(input: CreateRaceInput): RaceRecord {
-    const { seed, depth } = input.scramble;
-    const moves = input.scramble.moves?.length ? input.scramble.moves : makeScramble(seed, depth);
+    const s = input.scramble;
+    const resolved = resolveScramble({
+      source: s.source ?? (s.moves?.length ? "moves" : "seeded"),
+      seed: s.seed,
+      depth: s.depth,
+      moves: s.moves,
+      state: s.state,
+    });
+    if (!resolved.ok) throw new ScrambleError(resolved.error);
+    const r = resolved.scramble;
     const race: RaceConfig = {
       id: `${new Date().toISOString().replace(/[:.]/g, "-")}_${randomUUID().slice(0, 8)}`,
       createdAt: new Date().toISOString(),
-      scramble: { seed, depth: moves.length, moves },
+      scramble: { source: r.source, seed: r.seed, depth: r.depth ?? 0, moves: r.moves, state: r.state },
       concurrency: input.concurrency,
       contestants: input.contestants as ContestantConfig[],
     };

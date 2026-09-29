@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createContestant } from "@rubik-arena/adapters";
 import type { Contestant, ContestantConfig, RaceEvent } from "@rubik-arena/bench-core";
+import { applyMoves, randomState, SOLVED } from "@rubik-arena/cube-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildServer, type RunnerServer } from "../src/index.ts";
 
@@ -177,5 +178,70 @@ describe("race lifecycle", () => {
     });
     expect(await srv.store.markInterrupted()).toBe(1);
     expect((await app.inject({ url: "/api/races/old", headers: H })).json().status).toBe("interrupted");
+  });
+});
+
+describe("user-defined scrambles", () => {
+  const post = (app: Awaited<ReturnType<typeof make>>, scramble: unknown) =>
+    app.inject({
+      method: "POST",
+      url: "/api/races",
+      headers: H,
+      payload: { scramble, contestants: [baseline("koc")] },
+    });
+
+  it("accepts the user's own move sequence", async () => {
+    const app = await make();
+    const r = await post(app, { source: "moves", moves: ["R", "U", "R'", "U'"] });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().race.scramble).toMatchObject({
+      source: "moves",
+      depth: 4,
+      moves: ["R", "U", "R'", "U'"],
+    });
+    await srv.races.waitFor(r.json().id);
+  });
+
+  it("keeps old clients working: moves without source", async () => {
+    const app = await make();
+    const r = await post(app, { moves: ["F", "R"] });
+    expect(r.json().race.scramble.source).toBe("moves");
+    await srv.races.waitFor(r.json().id);
+  });
+
+  it("accepts a typed cube state and solves from it", async () => {
+    const app = await make();
+    const state = applyMoves(SOLVED, ["F", "R", "U2"]);
+    const r = await post(app, { source: "state", state: state.match(/.{9}/g)!.join(" ") });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().initialState).toBe(state);
+    expect(r.json().race.scramble.moves).toEqual([]);
+    await srv.races.waitFor(r.json().id);
+    const rec = (await app.inject({ url: `/api/races/${r.json().id}`, headers: H })).json();
+    expect(rec.results[0].solved).toBe(true);
+  });
+
+  it("accepts a full random state (WCA-style)", async () => {
+    const app = await make();
+    const r = await post(app, { source: "random-state", seed: 42 });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().initialState).toBe(randomState(42));
+    await srv.races.waitFor(r.json().id);
+  });
+
+  it("rejects invalid moves, impossible states and solved cubes with clear messages", async () => {
+    const app = await make();
+    const badMove = await post(app, { source: "moves", moves: ["R", "Rw"] });
+    expect(badMove.statusCode).toBe(400);
+    expect(badMove.json().error).toContain('invalid move "Rw"');
+    const flipped = SOLVED.split("");
+    [flipped[7], flipped[19]] = [flipped[19]!, flipped[7]!];
+    const impossible = await post(app, { source: "state", state: flipped.join("") });
+    expect(impossible.statusCode).toBe(400);
+    expect(impossible.json().error).toContain("flipped");
+    const solved = await post(app, { source: "state", state: SOLVED });
+    expect(solved.json().error).toContain("already solved");
+    const junk = await post(app, { source: "state", state: "<script>" });
+    expect(junk.statusCode).toBe(400);
   });
 });

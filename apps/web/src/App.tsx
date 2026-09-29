@@ -1,10 +1,17 @@
 import type { ContestantConfig, RaceEvent } from "@rubik-arena/bench-core";
-import { formatMoves, type Move, parseMoves, scramble } from "@rubik-arena/cube-engine";
+import { formatMoves } from "@rubik-arena/cube-engine";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { type AdapterStatus, bootstrapToken, type RaceSummary, RunnerApi } from "./api.ts";
 import { ContestantEditor } from "./components/ContestantEditor.tsx";
 import { Lane } from "./components/Lane.tsx";
 import { Leaderboard } from "./components/Leaderboard.tsx";
+import {
+  DEFAULT_DRAFT,
+  inputOf,
+  resolveDraft,
+  type ScrambleDraft,
+  ScramblePanel,
+} from "./components/ScramblePanel.tsx";
 import { DEMO_ADAPTERS, runDemoRace } from "./demo.ts";
 import { emptyView, formatDuration, type RaceView, reduceRace } from "./state.ts";
 
@@ -80,6 +87,13 @@ const FALLBACK_PRESETS: ContestantConfig[] = [
   { id: "kociemba", label: "Kociemba", adapter: "kociemba", ...DEFAULTS },
 ];
 
+const SOURCE_LABEL: Record<string, string> = {
+  seeded: "Level scramble",
+  moves: "Custom moves",
+  state: "Custom cube state",
+  "random-state": "Full random state",
+};
+
 let idCounter = 0;
 const newId = () => `c${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
@@ -96,9 +110,7 @@ export function App() {
   const [models, setModels] = useState<Record<string, string[]>>({});
   const [contestants, setContestants] = useState<ContestantConfig[]>(FALLBACK_PRESETS);
   const [presets, setPresets] = useState<ContestantConfig[]>(FALLBACK_PRESETS);
-  const [seed, setSeed] = useState(2026);
-  const [depth, setDepth] = useState(3);
-  const [customScramble, setCustomScramble] = useState("");
+  const [draft, setDraft] = useState<ScrambleDraft>(DEFAULT_DRAFT);
   const [concurrency, setConcurrency] = useState(1);
   const [view, dispatch] = useReducer(eventReducer, emptyView);
   const [raceId, setRaceId] = useState<string | null>(null);
@@ -160,18 +172,14 @@ export function App() {
     [api, demo, models],
   );
 
-  const scrambleMoves: Move[] | null = useMemo(() => {
-    if (!customScramble.trim()) return scramble(seed, depth);
-    const p = parseMoves(customScramble);
-    return p.ok ? p.moves : null;
-  }, [customScramble, seed, depth]);
+  const resolved = useMemo(() => resolveDraft(draft), [draft]);
 
   const onEvent = useCallback((event: RaceEvent) => dispatch({ event, now: Date.now() }), []);
 
   const start = async () => {
     setError(null);
-    if (!scrambleMoves)
-      return setError("The custom scramble has an invalid move. Use U D L R F B with ' or 2.");
+    if (!resolved.ok) return setError(`Scramble: ${resolved.error}`);
+    const input = inputOf(draft);
     if (!contestants.length) return setError("Add at least one contestant.");
     const blocked = contestants.find(
       (c) => demo && !DEMO_ADAPTERS.includes(c.adapter as (typeof DEMO_ADAPTERS)[number]),
@@ -184,15 +192,17 @@ export function App() {
     try {
       if (demo) {
         setRaceId(null);
-        await runDemoRace(
-          { seed, depth, moves: scrambleMoves, contestants, concurrency },
-          onEvent,
-          ctrl.signal,
-        );
+        await runDemoRace({ scramble: resolved.scramble, contestants, concurrency }, onEvent, ctrl.signal);
         return;
       }
       const created = await api.createRace({
-        scramble: { seed, depth, moves: scrambleMoves },
+        scramble: {
+          source: input.source,
+          seed: input.seed,
+          depth: input.depth,
+          moves: resolved.scramble.moves,
+          state: input.source === "state" ? resolved.scramble.state : undefined,
+        },
         concurrency,
         contestants,
       });
@@ -289,56 +299,20 @@ export function App() {
               if (!running) void start();
             }}
           >
-            <fieldset className="panel-inner" disabled={running}>
-              <legend>Scramble</legend>
-              <div className="grid-2">
-                <label className="field">
-                  <span>Seed</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={seed}
-                    disabled={!!customScramble.trim()}
-                    onChange={(e) => setSeed(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-                  />
-                </label>
-                <label className="field">
-                  <span>Depth (moves)</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={depth}
-                    disabled={!!customScramble.trim()}
-                    onChange={(e) =>
-                      setDepth(Math.max(1, Math.min(30, Math.floor(Number(e.target.value) || 1))))
-                    }
-                  />
-                </label>
-              </div>
-              <label className="field">
-                <span>Custom scramble (optional)</span>
-                <input
-                  value={customScramble}
-                  placeholder="e.g. R U R' U' F2"
-                  spellCheck={false}
-                  aria-invalid={scrambleMoves === null}
-                  onChange={(e) => setCustomScramble(e.target.value)}
-                />
-              </label>
-              <p className="scramble-preview" aria-live="polite">
-                {scrambleMoves ? formatMoves(scrambleMoves) : "Invalid move in custom scramble"}
-              </p>
-              <label className="field">
-                <span>Run contestants</span>
-                <select value={concurrency} onChange={(e) => setConcurrency(Number(e.target.value))}>
-                  <option value={1}>One at a time</option>
-                  <option value={2}>2 in parallel</option>
-                  <option value={3}>3 in parallel</option>
-                  <option value={4}>4 in parallel</option>
-                </select>
-              </label>
-            </fieldset>
+            <ScramblePanel draft={draft} disabled={running} onChange={setDraft} resolved={resolved} />
+            <label className="field">
+              <span>Run contestants</span>
+              <select
+                value={concurrency}
+                disabled={running}
+                onChange={(e) => setConcurrency(Number(e.target.value))}
+              >
+                <option value={1}>One at a time</option>
+                <option value={2}>2 in parallel</option>
+                <option value={3}>3 in parallel</option>
+                <option value={4}>4 in parallel</option>
+              </select>
+            </label>
 
             <h3 className="section-title">Contestants</h3>
             {contestants.map((c, i) => (
@@ -403,8 +377,14 @@ export function App() {
             <h2 id="arena-title">Arena</h2>
             {view.race && (
               <p className="arena-meta">
-                Scramble <code>{formatMoves(view.race.scramble.moves)}</code> ·{" "}
-                {view.race.scramble.moves.length} moves ·{" "}
+                {view.race.scramble.moves.length > 0 ? (
+                  <>
+                    Scramble <code>{formatMoves(view.race.scramble.moves)}</code> ·{" "}
+                    {view.race.scramble.moves.length} moves ·{" "}
+                  </>
+                ) : (
+                  <>{SOURCE_LABEL[view.race.scramble.source ?? "state"]} · </>
+                )}
                 {view.status === "running" ? "running" : view.status}
                 {raceId && !demo && view.status !== "running" && (
                   <>
@@ -452,7 +432,13 @@ export function App() {
                     >
                       <span className="history-date">{new Date(h.createdAt).toLocaleString()}</span>
                       <span className="history-meta">
-                        depth {h.scrambleDepth} · {h.status}
+                        {h.scrambleDepth
+                          ? `depth ${h.scrambleDepth}`
+                          : SOURCE_LABEL[h.scrambleSource ?? "state"]}
+                        {h.startDistance
+                          ? ` · ${h.startDistance.exact ? "" : "≤"}${h.startDistance.value} from solved`
+                          : ""}{" "}
+                        · {h.status}
                       </span>
                       <span className="history-people">
                         {h.contestants

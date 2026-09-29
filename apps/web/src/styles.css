@@ -632,3 +632,148 @@ tbody th {
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
+
+/* Scramble panel */
+textarea {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  width: 100%;
+  resize: vertical;
+}
+textarea[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.seg {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  min-height: 34px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.seg:hover:not(.active) {
+  color: var(--text);
+}
+.seg.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.segmented + .hint {
+  margin: var(--space-2) 0 var(--space-3);
+}
+.input-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.input-row .icon-btn {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+.field > label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.scramble-summary {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.scramble-summary .error {
+  margin: 0;
+}
+.net {
+  flex: 0 0 132px;
+  width: 132px;
+  height: auto;
+}
+.scramble-facts {
+  min-width: 0;
+  flex: 1;
+}
+.scramble-facts .hint {
+  margin-top: 0;
+}
+.state-editor {
+  margin-bottom: var(--space-2);
+}
+.palette {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.swatch {
+  flex: 1;
+  min-height: 32px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #111;
+  cursor: pointer;
+}
+.swatch[aria-pressed="true"] {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.faces {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+.face-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.face-name {
+  grid-column: 1 / -1;
+  padding: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.sticker {
+  aspect-ratio: 1;
+  min-width: 24px;
+  border-radius: 3px;
+  border: 1px solid rgb(0 0 0 / 35%);
+  cursor: pointer;
+  padding: 0;
+}
+.sticker:disabled {
+  cursor: default;
+  outline: 2px solid rgb(0 0 0 / 45%);
+  outline-offset: -4px;
+}
+.net rect {
+  stroke: rgb(0 0 0 / 35%);
+  stroke-width: 0.6;
+}
