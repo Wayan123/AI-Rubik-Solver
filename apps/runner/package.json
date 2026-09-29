@@ -1,0 +1,21 @@
+{
+  "name": "@rubik-arena/runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.5",
+    "@rubik-arena/adapters": "0.1.0",
+    "@rubik-arena/bench-core": "0.1.0",
+    "@rubik-arena/cube-engine": "0.1.0",
+    "fastify": "5.12.5",
+    "zod": "4.6.5"
+  }
+}

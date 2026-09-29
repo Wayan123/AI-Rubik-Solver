@@ -1,0 +1,13 @@
+{
+  "name": "@rubik-arena/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rubik-arena/bench-core": "0.1.0",
+    "@rubik-arena/cube-engine": "0.1.0"
+  }
+}

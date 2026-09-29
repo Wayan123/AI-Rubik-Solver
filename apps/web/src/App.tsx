@@ -1,0 +1,481 @@
+import type { ContestantConfig, RaceEvent } from "@rubik-arena/bench-core";
+import { formatMoves, type Move, parseMoves, scramble } from "@rubik-arena/cube-engine";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { type AdapterStatus, bootstrapToken, type RaceSummary, RunnerApi } from "./api.ts";
+import { ContestantEditor } from "./components/ContestantEditor.tsx";
+import { Lane } from "./components/Lane.tsx";
+import { Leaderboard } from "./components/Leaderboard.tsx";
+import { DEMO_ADAPTERS, runDemoRace } from "./demo.ts";
+import { emptyView, formatDuration, type RaceView, reduceRace } from "./state.ts";
+
+type Connection =
+  | { kind: "checking" }
+  | { kind: "runner"; version: string }
+  | { kind: "demo"; reason: string };
+
+const DEMO_ADAPTER_LIST: AdapterStatus[] = [
+  {
+    id: "kociemba",
+    name: "Kociemba solver (baseline)",
+    kind: "baseline",
+    auth: "none",
+    description: "Two-phase algorithm. The reference for speed and move count.",
+    thinkingLevels: [],
+    modelHint: "",
+    browserCapable: true,
+    available: true,
+  },
+  {
+    id: "random",
+    name: "Random mover (baseline)",
+    kind: "baseline",
+    auth: "none",
+    description: "Uniformly random moves. The floor any model should beat.",
+    thinkingLevels: [],
+    modelHint: "",
+    browserCapable: true,
+    available: true,
+  },
+  {
+    id: "pi",
+    name: "Pi coding agent",
+    kind: "cli",
+    auth: "cli-login",
+    description: "",
+    thinkingLevels: ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+    modelHint: "kiro/claude-opus-5-5",
+    browserCapable: false,
+    available: true,
+  },
+  {
+    id: "kiro-cli",
+    name: "Kiro CLI",
+    kind: "cli",
+    auth: "cli-login",
+    description: "",
+    thinkingLevels: ["low", "medium", "high", "xhigh", "max"],
+    modelHint: "claude-opus-5.5",
+    browserCapable: false,
+    available: true,
+  },
+];
+
+const DEFAULTS = {
+  mode: "interactive",
+  maxTurns: 30,
+  maxMovesPerTurn: 10,
+  requestTimeoutMs: 600_000,
+  runTimeoutMs: 1_800_000,
+} as const;
+
+const FALLBACK_PRESETS: ContestantConfig[] = [
+  {
+    id: "pi-opus55-high",
+    label: "Opus 5.5 · high (Pi/Kiro)",
+    adapter: "pi",
+    model: "kiro/claude-opus-5-5",
+    thinking: "high",
+    ...DEFAULTS,
+  },
+  { id: "kociemba", label: "Kociemba", adapter: "kociemba", ...DEFAULTS },
+];
+
+let idCounter = 0;
+const newId = () => `c${Date.now().toString(36)}${(idCounter++).toString(36)}`;
+
+function eventReducer(view: RaceView, action: { event: RaceEvent; now: number } | { reset: true }): RaceView {
+  if ("reset" in action) return emptyView;
+  return reduceRace(view, action.event, action.now);
+}
+
+export function App() {
+  const [token] = useState(() => bootstrapToken());
+  const api = useMemo(() => new RunnerApi(token), [token]);
+  const [conn, setConn] = useState<Connection>({ kind: "checking" });
+  const [adapters, setAdapters] = useState<AdapterStatus[]>(DEMO_ADAPTER_LIST);
+  const [models, setModels] = useState<Record<string, string[]>>({});
+  const [contestants, setContestants] = useState<ContestantConfig[]>(FALLBACK_PRESETS);
+  const [presets, setPresets] = useState<ContestantConfig[]>(FALLBACK_PRESETS);
+  const [seed, setSeed] = useState(2026);
+  const [depth, setDepth] = useState(3);
+  const [customScramble, setCustomScramble] = useState("");
+  const [concurrency, setConcurrency] = useState(1);
+  const [view, dispatch] = useReducer(eventReducer, emptyView);
+  const [raceId, setRaceId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<RaceSummary[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+  const abortRef = useRef<AbortController | null>(null);
+  const demo = conn.kind === "demo";
+  const running = view.status === "running";
+
+  // Connection + discovery.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const h = await api.health();
+        if (!token) throw new Error("Open the link printed by `npm start` (it contains the access token).");
+        const [ads, pre] = await Promise.all([api.adapters(), api.presets()]);
+        if (cancelled) return;
+        setConn({ kind: "runner", version: h.version });
+        setAdapters(ads);
+        if (pre.contestants?.length) {
+          const filled = pre.contestants.map((c) => ({ ...DEFAULTS, ...c }));
+          setPresets(filled);
+          setContestants(filled.slice(0, 2));
+        }
+        setHistory((await api.races()).races);
+      } catch (e) {
+        if (cancelled) return;
+        setConn({ kind: "demo", reason: e instanceof Error ? e.message : String(e) });
+        setAdapters(DEMO_ADAPTER_LIST);
+        setContestants([
+          { id: "kociemba", label: "Kociemba", adapter: "kociemba", ...DEFAULTS },
+          { id: "random", label: "Random", adapter: "random", ...DEFAULTS, maxTurns: 10 },
+        ]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, token]);
+
+  // Ticking timer while running.
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(t);
+  }, [running]);
+
+  const loadModels = useCallback(
+    (adapterId: string) => {
+      if (demo || models[adapterId]) return;
+      setModels((m) => ({ ...m, [adapterId]: [] }));
+      api
+        .models(adapterId)
+        .then((r) => setModels((m) => ({ ...m, [adapterId]: r.models })))
+        .catch(() => {});
+    },
+    [api, demo, models],
+  );
+
+  const scrambleMoves: Move[] | null = useMemo(() => {
+    if (!customScramble.trim()) return scramble(seed, depth);
+    const p = parseMoves(customScramble);
+    return p.ok ? p.moves : null;
+  }, [customScramble, seed, depth]);
+
+  const onEvent = useCallback((event: RaceEvent) => dispatch({ event, now: Date.now() }), []);
+
+  const start = async () => {
+    setError(null);
+    if (!scrambleMoves)
+      return setError("The custom scramble has an invalid move. Use U D L R F B with ' or 2.");
+    if (!contestants.length) return setError("Add at least one contestant.");
+    const blocked = contestants.find(
+      (c) => demo && !DEMO_ADAPTERS.includes(c.adapter as (typeof DEMO_ADAPTERS)[number]),
+    );
+    if (blocked) return setError(`“${blocked.label}” needs the local runner. Start it with npm start.`);
+    dispatch({ reset: true });
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setNow(Date.now());
+    try {
+      if (demo) {
+        setRaceId(null);
+        await runDemoRace(
+          { seed, depth, moves: scrambleMoves, contestants, concurrency },
+          onEvent,
+          ctrl.signal,
+        );
+        return;
+      }
+      const created = await api.createRace({
+        scramble: { seed, depth, moves: scrambleMoves },
+        concurrency,
+        contestants,
+      });
+      setRaceId(created.id);
+      await api.streamEvents(created.id, onEvent, ctrl.signal);
+      setHistory((await api.races()).races);
+    } catch (e) {
+      if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const cancel = async () => {
+    if (raceId && !demo) await api.cancel(raceId).catch(() => {});
+    else abortRef.current?.abort(new Error("cancelled by user"));
+  };
+
+  const openRace = async (id: string) => {
+    setError(null);
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    dispatch({ reset: true });
+    setRaceId(id);
+    try {
+      await api.streamEvents(id, onEvent, ctrl.signal);
+    } catch (e) {
+      if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const exportRace = async () => {
+    if (!raceId) return;
+    const data = await api.race(raceId);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `rubik-arena-${raceId}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const addContestant = (preset?: ContestantConfig) => {
+    const base = preset ?? {
+      label: "New contestant",
+      adapter: demo ? "random" : "pi",
+      model: demo ? undefined : "kiro/claude-opus-5-5",
+      ...DEFAULTS,
+    };
+    setContestants((cs) => [...cs, { ...base, id: newId(), label: preset ? preset.label : base.label }]);
+  };
+
+  const lanes = view.order.map((id) => view.lanes[id]!).filter(Boolean);
+
+  return (
+    <div className="app">
+      <a href="#arena" className="skip">
+        Skip to arena
+      </a>
+      <header className="topbar">
+        <div className="brand">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <rect x="1" y="1" width="6.5" height="6.5" rx="1" fill="#f4f4f1" />
+            <rect x="8.75" y="1" width="6.5" height="6.5" rx="1" fill="#c8352d" />
+            <rect x="16.5" y="1" width="6.5" height="6.5" rx="1" fill="#2f9e5b" />
+            <rect x="1" y="8.75" width="6.5" height="6.5" rx="1" fill="#2c64c6" />
+            <rect x="8.75" y="8.75" width="6.5" height="6.5" rx="1" fill="#e8b33a" />
+            <rect x="16.5" y="8.75" width="6.5" height="6.5" rx="1" fill="#ec7a2a" />
+            <rect x="1" y="16.5" width="6.5" height="6.5" rx="1" fill="#2f9e5b" />
+            <rect x="8.75" y="16.5" width="6.5" height="6.5" rx="1" fill="#f4f4f1" />
+            <rect x="16.5" y="16.5" width="6.5" height="6.5" rx="1" fill="#c8352d" />
+          </svg>
+          <span>Rubik Arena</span>
+        </div>
+        <p className={`conn conn-${conn.kind}`} role="status">
+          {conn.kind === "checking" && "Connecting to runner…"}
+          {conn.kind === "runner" && `Local runner v${conn.version}`}
+          {conn.kind === "demo" && "Demo mode — baselines only"}
+        </p>
+      </header>
+
+      {conn.kind === "demo" && (
+        <p className="banner" role="note">
+          {conn.reason.includes("token") ? conn.reason : "No local runner found."} To race LLMs through your
+          CLI logins (Pi, Kiro, …), run <code>npm start</code> and open the printed link.
+        </p>
+      )}
+
+      <main className="layout">
+        <aside className="setup" aria-labelledby="setup-title">
+          <h2 id="setup-title">Race setup</h2>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!running) void start();
+            }}
+          >
+            <fieldset className="panel-inner" disabled={running}>
+              <legend>Scramble</legend>
+              <div className="grid-2">
+                <label className="field">
+                  <span>Seed</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={seed}
+                    disabled={!!customScramble.trim()}
+                    onChange={(e) => setSeed(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  />
+                </label>
+                <label className="field">
+                  <span>Depth (moves)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={depth}
+                    disabled={!!customScramble.trim()}
+                    onChange={(e) =>
+                      setDepth(Math.max(1, Math.min(30, Math.floor(Number(e.target.value) || 1))))
+                    }
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Custom scramble (optional)</span>
+                <input
+                  value={customScramble}
+                  placeholder="e.g. R U R' U' F2"
+                  spellCheck={false}
+                  aria-invalid={scrambleMoves === null}
+                  onChange={(e) => setCustomScramble(e.target.value)}
+                />
+              </label>
+              <p className="scramble-preview" aria-live="polite">
+                {scrambleMoves ? formatMoves(scrambleMoves) : "Invalid move in custom scramble"}
+              </p>
+              <label className="field">
+                <span>Run contestants</span>
+                <select value={concurrency} onChange={(e) => setConcurrency(Number(e.target.value))}>
+                  <option value={1}>One at a time</option>
+                  <option value={2}>2 in parallel</option>
+                  <option value={3}>3 in parallel</option>
+                  <option value={4}>4 in parallel</option>
+                </select>
+              </label>
+            </fieldset>
+
+            <h3 className="section-title">Contestants</h3>
+            {contestants.map((c, i) => (
+              <ContestantEditor
+                key={c.id}
+                value={c}
+                adapters={adapters}
+                models={models}
+                disabled={running}
+                demo={demo}
+                onChange={(next) => setContestants((cs) => cs.map((x, j) => (j === i ? next : x)))}
+                onRemove={() => setContestants((cs) => cs.filter((_, j) => j !== i))}
+                onLoadModels={loadModels}
+              />
+            ))}
+            <div className="row">
+              <button type="button" className="btn" onClick={() => addContestant()} disabled={running}>
+                Add contestant
+              </button>
+              {presets.length > 0 && (
+                <select
+                  className="preset-select"
+                  aria-label="Add from preset"
+                  value=""
+                  disabled={running}
+                  onChange={(e) => {
+                    const p = presets.find((x) => x.id === e.target.value);
+                    if (p) addContestant(p);
+                  }}
+                >
+                  <option value="">Add preset…</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="actions">
+              {running ? (
+                <button type="button" className="btn btn-danger" onClick={() => void cancel()}>
+                  Cancel race
+                </button>
+              ) : (
+                <button type="submit" className="btn btn-primary">
+                  Start race
+                </button>
+              )}
+            </div>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+          </form>
+        </aside>
+
+        <section id="arena" className="arena" aria-labelledby="arena-title" tabIndex={-1}>
+          <div className="arena-head">
+            <h2 id="arena-title">Arena</h2>
+            {view.race && (
+              <p className="arena-meta">
+                Scramble <code>{formatMoves(view.race.scramble.moves)}</code> ·{" "}
+                {view.race.scramble.moves.length} moves ·{" "}
+                {view.status === "running" ? "running" : view.status}
+                {raceId && !demo && view.status !== "running" && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <button type="button" className="link" onClick={() => void exportRace()}>
+                      Export JSON
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+          {lanes.length === 0 ? (
+            <div className="empty">
+              <p>
+                Pick contestants, choose a scramble and press <strong>Start race</strong>. Every contestant
+                gets the same cube; the runner verifies each move and times every turn.
+              </p>
+              <p className="hint">
+                Start small: depth 3–5 is already hard for most models. Distance-to-solved shows progress even
+                when a model doesn’t finish.
+              </p>
+            </div>
+          ) : (
+            <div className="lanes">
+              {lanes.map((l) => (
+                <Lane key={l.config.id} lane={l} now={now} />
+              ))}
+            </div>
+          )}
+          <Leaderboard lanes={lanes} now={now} />
+
+          {!demo && history.length > 0 && (
+            <section className="panel" aria-labelledby="hist-title">
+              <h2 id="hist-title">History</h2>
+              <ul className="history">
+                {history.slice(0, 20).map((h) => (
+                  <li key={h.id}>
+                    <button
+                      type="button"
+                      className="history-item"
+                      onClick={() => void openRace(h.id)}
+                      disabled={running}
+                    >
+                      <span className="history-date">{new Date(h.createdAt).toLocaleString()}</span>
+                      <span className="history-meta">
+                        depth {h.scrambleDepth} · {h.status}
+                      </span>
+                      <span className="history-people">
+                        {h.contestants
+                          .map(
+                            (c) =>
+                              `${c.label}: ${c.solved ? `✓ ${formatDuration(c.wallMs)}` : `${Math.round(c.progress * 100)}%`}`,
+                          )
+                          .join(" · ")}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </section>
+      </main>
+      <footer className="footer">
+        <p>
+          Moves are applied and verified by the harness, never trusted from the model. Distance is exact up to
+          6–8 moves, otherwise a Kociemba upper bound (≤).
+        </p>
+      </footer>
+    </div>
+  );
+}

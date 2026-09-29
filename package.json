@@ -1,0 +1,43 @@
+{
+  "name": "rubik-arena",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first 3D dashboard that benchmarks LLMs (via logged-in CLIs, BYOK APIs or local models) on solving the Rubik's cube, with timers and harness-verified moves.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "tsx watch apps/runner/src/main.ts",
+    "dev:web": "vite apps/web",
+    "build": "vite build apps/web",
+    "start": "vite build apps/web && tsx apps/runner/src/main.ts",
+    "runner": "tsx apps/runner/src/main.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "tsx scripts/e2e-pi.ts",
+    "typecheck": "tsc -b",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/node": "22.20.4",
+    "@vitejs/plugin-react": "6.1.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
+  },
+  "overrides": {
+    "cubejs": {
+      "npm": "file:./tools/empty-npm"
+    }
+  }
+}

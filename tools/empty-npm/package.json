@@ -1,0 +1,7 @@
+{
+  "name": "npm",
+  "version": "6.99.0",
+  "private": true,
+  "description": "Empty stand-in: cubejs@1.3.2 wrongly lists npm@^6 as a runtime dependency. It is never loaded; this avoids installing npm 6 (and its vulnerable transitive deps / .bin/npm shim).",
+  "license": "MIT"
+}
