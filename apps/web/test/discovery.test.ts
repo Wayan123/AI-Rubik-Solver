@@ -1,5 +1,8 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ApiError, classifyRunnerConnectionError, type DiscoverySnapshot } from "../src/api.ts";
+import { HarnessCatalog } from "../src/components/HarnessCatalog.tsx";
 import { contestantFromDiscoveredModel, filterDiscovery, isContestantStale } from "../src/discovery.ts";
 
 const snapshot: DiscoverySnapshot = {
@@ -53,6 +56,26 @@ const snapshot: DiscoverySnapshot = {
     },
   ],
 };
+
+describe("catalog disclosure", () => {
+  it("keeps model rows hidden by default while showing useful counts", () => {
+    const html = renderToStaticMarkup(
+      createElement(HarnessCatalog, {
+        snapshot,
+        busy: false,
+        error: null,
+        onRefresh: () => {},
+        onAddModel: () => {},
+        onBackToTop: () => {},
+      }),
+    );
+    expect(html).toContain("2 harnesses · 1 model");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain("View models");
+    expect(html).not.toContain("openai-codex/gpt-sol-6.1");
+    expect(html).not.toContain('class="model-list"');
+  });
+});
 
 describe("runner connection errors", () => {
   it("classifies a stale bearer token as expired access rather than demo mode", () => {

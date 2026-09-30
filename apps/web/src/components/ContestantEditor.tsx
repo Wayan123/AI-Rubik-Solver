@@ -35,7 +35,7 @@ export function ContestantEditor({
     onChange({ ...value, [k]: v });
 
   return (
-    <fieldset className="contestant" disabled={disabled}>
+    <fieldset id={`contestant-${value.id}`} className="contestant" disabled={disabled} tabIndex={-1}>
       <legend className="sr-only">Contestant {value.label}</legend>
       <div className="contestant-head">
         <label className="field grow">
