@@ -29,6 +29,64 @@ export interface AdapterStatus {
   version?: string;
 }
 
+export type DiscoveryState = "idle" | "scanning" | "ready" | "partial" | "failed";
+export type HarnessStatus =
+  | "ready"
+  | "login-required"
+  | "catalog-only"
+  | "unavailable"
+  | "discovery-failed"
+  | "unsupported-version";
+
+export interface RuntimeEnvironment {
+  id: string;
+  kind: "linux" | "macos" | "wsl" | "windows-host";
+  label: string;
+  available: boolean;
+}
+
+export interface DiscoveredHarness {
+  instanceId: string;
+  harnessId: string;
+  displayName: string;
+  surface: "cli" | "ide" | "extension";
+  environmentId: string;
+  status: HarnessStatus;
+  supportLevel: "verified-runnable" | "catalog-only" | "blocked";
+  version?: string;
+  sanitizedLocation?: string;
+  adapterId?: string;
+  modelDiscovery: "live" | "local" | "none";
+  documentationUrl: string;
+  repositoryUrl?: string;
+  update?: { current: string; latest: string; releaseUrl: string; publishedAt?: string };
+  message?: string;
+}
+
+export interface DiscoveredModel {
+  routeId: string;
+  harnessInstanceId: string;
+  adapterId?: string;
+  modelId: string;
+  provider?: string;
+  displayName?: string;
+  source: "live-cli" | "local-catalog" | "official-catalog";
+  selectable: boolean;
+  thinkingLevels: string[];
+}
+
+export interface DiscoverySnapshot {
+  generation: number;
+  state: DiscoveryState;
+  startedAt?: string;
+  completedAt?: string;
+  environments: RuntimeEnvironment[];
+  harnesses: DiscoveredHarness[];
+  models: DiscoveredModel[];
+  warnings: Array<{ code: string; harnessInstanceId?: string; message: string }>;
+  offline: boolean;
+}
+
 export interface RaceSummary {
   id: string;
   createdAt: string;
@@ -93,6 +151,14 @@ export class RunnerApi {
 
   health = () => this.req<{ ok: boolean; version: string }>("/api/health");
   adapters = () => this.req<AdapterStatus[]>("/api/adapters");
+  discovery = () => this.req<DiscoverySnapshot>("/api/discovery");
+  discoveryStatus = () =>
+    this.req<
+      Pick<DiscoverySnapshot, "generation" | "state" | "startedAt" | "completedAt" | "offline"> & {
+        warningCount: number;
+      }
+    >("/api/discovery/status");
+  refreshDiscovery = () => this.req<DiscoverySnapshot>("/api/discovery/refresh", { method: "POST" });
   models = (id: string) => this.req<{ models: string[] }>(`/api/adapters/${encodeURIComponent(id)}/models`);
   presets = () => this.req<{ contestants: ContestantConfig[] }>("/api/presets");
   races = () => this.req<{ races: RaceSummary[] }>("/api/races");

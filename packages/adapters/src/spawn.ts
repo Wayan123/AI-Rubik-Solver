@@ -13,6 +13,10 @@ export interface SpawnCliOptions {
   timeoutMs: number;
   /** Called for each complete stdout line. */
   onLine?: (line: string) => void;
+  /** Maximum captured stdout bytes before the child is stopped. */
+  stdoutLimitBytes?: number;
+  /** Maximum captured stderr bytes before the child is stopped. */
+  stderrLimitBytes?: number;
   /** Extra environment variables (merged over process.env). */
   env?: Record<string, string | undefined>;
   /** Working directory; when omitted a fresh empty temp directory is created and removed afterwards. */
@@ -57,7 +61,9 @@ export async function spawnCli(opts: SpawnCliOptions): Promise<SpawnCliResult> {
         windowsHide: true,
       });
       let stdout = "";
+      let stdoutBytes = 0;
       let stderr = "";
+      let stderrBytes = 0;
       let pending = "";
       let killTimer: NodeJS.Timeout | undefined;
       let stopReason: Error | undefined;
@@ -79,6 +85,11 @@ export async function spawnCli(opts: SpawnCliOptions): Promise<SpawnCliResult> {
 
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
+        stdoutBytes += Buffer.byteLength(chunk);
+        if (opts.stdoutLimitBytes && stdoutBytes > opts.stdoutLimitBytes) {
+          stop(new CliError(`${opts.command} stdout exceeded ${opts.stdoutLimitBytes} bytes`));
+          return;
+        }
         stdout += chunk;
         pending += chunk;
         let nl = pending.indexOf("\n");
@@ -91,7 +102,13 @@ export async function spawnCli(opts: SpawnCliOptions): Promise<SpawnCliResult> {
       });
       child.stderr.setEncoding("utf8");
       child.stderr.on("data", (chunk: string) => {
-        if (stderr.length < STDERR_LIMIT) stderr = (stderr + chunk).slice(0, STDERR_LIMIT);
+        const limit = opts.stderrLimitBytes ?? STDERR_LIMIT;
+        stderrBytes += Buffer.byteLength(chunk);
+        if (stderrBytes > limit) {
+          stop(new CliError(`${opts.command} stderr exceeded ${limit} bytes`));
+          return;
+        }
+        stderr += chunk;
       });
       child.on("error", (err) => {
         clearTimeout(timer);

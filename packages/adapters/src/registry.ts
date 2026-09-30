@@ -31,7 +31,6 @@ export interface AdapterStatus extends AdapterInfo {
 interface AdapterDefinition extends AdapterInfo {
   create(config: ContestantConfig): Contestant;
   detect(): Promise<{ available: boolean; version?: string }>;
-  listModels?(search?: string): Promise<string[]>;
 }
 
 const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
@@ -47,6 +46,42 @@ const cliDetect = (bin: string) => async () => {
   const version = await probeVersion(bin);
   return version ? { available: true, version } : { available: false };
 };
+
+export function adapterModelProbe(
+  adapterId: string,
+  search?: string,
+): { command: string; args: string[]; parse: (output: string) => string[] } | undefined {
+  if (adapterId === "pi") {
+    return {
+      command: process.env.RUBIK_PI_BIN ?? "pi",
+      args: ["--list-models", ...(search ? [search] : [])],
+      parse: parsePiModelList,
+    };
+  }
+  if (adapterId === "kiro-cli") {
+    return {
+      command: process.env.RUBIK_KIRO_BIN ?? "kiro-cli",
+      args: ["chat", "--list-models", "--format", "json"],
+      parse: parseKiroModelList,
+    };
+  }
+  return undefined;
+}
+
+export async function probeAdapterModels(adapterId: string, search?: string): Promise<string[]> {
+  const spec = adapterModelProbe(adapterId, search);
+  if (!spec) return [];
+  const r = await spawnCli({
+    command: spec.command,
+    args: spec.args,
+    signal: AbortSignal.timeout(60_000),
+    timeoutMs: 60_000,
+    stdoutLimitBytes: 1024 * 1024,
+    stderrLimitBytes: 8 * 1024,
+  });
+  if (r.exitCode !== 0) throw new Error(r.stderr || `${adapterId} model list exited ${r.exitCode}`);
+  return spec.parse(r.stdout);
+}
 
 const DEFINITIONS: AdapterDefinition[] = [
   {
@@ -66,15 +101,6 @@ const DEFINITIONS: AdapterDefinition[] = [
         extensions: strList(c.options?.extensions),
       }),
     detect: cliDetect(process.env.RUBIK_PI_BIN ?? "pi"),
-    async listModels(search) {
-      const r = await spawnCli({
-        command: process.env.RUBIK_PI_BIN ?? "pi",
-        args: ["--list-models", ...(search ? [search] : [])],
-        signal: AbortSignal.timeout(60_000),
-        timeoutMs: 60_000,
-      });
-      return parsePiModelList(r.stdout);
-    },
   },
   {
     id: "kiro-cli",
@@ -88,15 +114,6 @@ const DEFINITIONS: AdapterDefinition[] = [
     browserCapable: false,
     create: (c) => new KiroClient({ model: requireModel(c), effort: c.thinking }),
     detect: cliDetect(process.env.RUBIK_KIRO_BIN ?? "kiro-cli"),
-    async listModels() {
-      const r = await spawnCli({
-        command: process.env.RUBIK_KIRO_BIN ?? "kiro-cli",
-        args: ["chat", "--list-models", "--format", "json"],
-        signal: AbortSignal.timeout(60_000),
-        timeoutMs: 60_000,
-      });
-      return parseKiroModelList(r.stdout);
-    },
   },
   {
     id: "hermes",
@@ -160,12 +177,12 @@ const DEFINITIONS: AdapterDefinition[] = [
 const BY_ID = new Map(DEFINITIONS.map((d) => [d.id, d]));
 
 export function adapterInfos(): AdapterInfo[] {
-  return DEFINITIONS.map(({ create: _c, detect: _d, listModels: _l, ...info }) => info);
+  return DEFINITIONS.map(({ create: _c, detect: _d, ...info }) => info);
 }
 
 export async function detectAdapters(): Promise<AdapterStatus[]> {
   return Promise.all(
-    DEFINITIONS.map(async ({ create: _c, detect, listModels: _l, ...info }) => ({
+    DEFINITIONS.map(async ({ create: _c, detect, ...info }) => ({
       ...info,
       ...(await detect()),
     })),
@@ -173,9 +190,8 @@ export async function detectAdapters(): Promise<AdapterStatus[]> {
 }
 
 export async function listModels(adapterId: string, search?: string): Promise<string[]> {
-  const def = BY_ID.get(adapterId);
-  if (!def) throw new Error(`unknown adapter "${adapterId}"`);
-  return def.listModels ? def.listModels(search) : [];
+  if (!BY_ID.has(adapterId)) throw new Error(`unknown adapter "${adapterId}"`);
+  return probeAdapterModels(adapterId, search);
 }
 
 export function createContestant(config: ContestantConfig): Contestant {

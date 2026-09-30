@@ -230,11 +230,22 @@ export class PiClient implements ModelClient {
   }
 }
 
+const MAX_MODEL_ID_BYTES = 256;
+const MAX_MODELS = 2_000;
+
+export function isSafePiModelId(value: string): boolean {
+  return Buffer.byteLength(value) <= MAX_MODEL_ID_BYTES && /^[\w.-]+(?:\/[\w.:-]+){1,3}$/.test(value);
+}
+
 /** List models via `pi --list-models [search]` (table output). */
 export function parsePiModelList(output: string): string[] {
-  return output
-    .split("\n")
-    .map((l) => l.trim().split(/\s+/))
-    .filter((cols) => cols.length >= 2 && cols[0] !== "provider" && /^[\w.-]+$/.test(cols[0]!))
-    .map((cols) => `${cols[0]}/${cols[1]}`);
+  const result: string[] = [];
+  for (const line of output.split("\n")) {
+    const cols = line.trim().split(/\s+/);
+    if (cols.length < 2 || cols[0] === "provider") continue;
+    const id = `${cols[0]}/${cols[1]}`;
+    if (isSafePiModelId(id)) result.push(id);
+    if (result.length >= MAX_MODELS) break;
+  }
+  return result;
 }

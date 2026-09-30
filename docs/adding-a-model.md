@@ -1,6 +1,10 @@
 # Adding a model or CLI
 
-Most new models need no code at all:
+Most new models need no code at all. The local runner scans supported harnesses at startup; open **Harnesses &
+models** and press **Refresh models** after installing or updating one. Discovery is passive and does not send a
+prompt or consume model credits. See [`docs/harnesses/README.md`](harnesses/README.md) for connection instructions
+and [`docs/harnesses/adding-a-harness.md`](harnesses/adding-a-harness.md) for the security gate applied to new
+harnesses.
 
 - **A new model on a CLI you already use** (for example a future `kiro/claude-opus-6`): type its id in the Model
   field, or add a preset to `config/contestants.json`. The dashboard also lists the models each CLI reports

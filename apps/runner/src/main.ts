@@ -1,7 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { release, version } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { scanDiscovery } from "@rubik-arena/adapters";
 import { initDistanceTable, initSolver } from "@rubik-arena/cube-engine";
 import { generateToken } from "./auth.ts";
+import { DiscoveryService } from "./discovery.ts";
 import { buildServer } from "./server.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
@@ -16,10 +19,32 @@ const tokenFile = resolve(process.env.RUBIK_TOKEN_FILE ?? join(root, "data", ".r
 initSolver();
 initDistanceTable();
 
-const { app, races, store } = await buildServer({ token, port, dataDir, presetsFile, webDir, logger: false });
+const discovery = new DiscoveryService({
+  offline: process.env.RUBIK_DISCOVERY_OFFLINE === "1",
+  scan: () =>
+    scanDiscovery({
+      platform: process.platform,
+      release: release(),
+      versionText: version(),
+      pathValue: process.env.PATH ?? "",
+      env: process.env,
+      signal: new AbortController().signal,
+      offline: process.env.RUBIK_DISCOVERY_OFFLINE === "1",
+    }),
+});
+const { app, races, store } = await buildServer({
+  token,
+  port,
+  dataDir,
+  presetsFile,
+  webDir,
+  discovery,
+  logger: false,
+});
 const interrupted = await store.markInterrupted();
 // Loopback only: this server can spawn CLIs that act with your logins.
 await app.listen({ host: "127.0.0.1", port });
+void discovery.ensureStarted();
 
 // Token file lets `npm run dev:web` (Vite proxy) pick it up; it lives in gitignored data/ with mode 0600.
 mkdirSync(dirname(tokenFile), { recursive: true });

@@ -58,8 +58,12 @@ All of these use a login you already have. **No API key is needed** except for t
 
 `pi --list-models` shows every model your Pi logins can reach. Pi provider extensions (Kiro, Antigravity, …) are
 found automatically from `~/.pi/agent/settings.json`, so a newly installed provider shows up without code
-changes. Presets are in [`config/contestants.json`](config/contestants.json) and grouped by login in the
-dashboard. To add another CLI, see [docs/adding-a-model.md](docs/adding-a-model.md).
+changes. The runner also scans supported CLI and IDE harnesses at startup; use **Harnesses & models → Refresh
+models** after installing or updating one. Discovery never sends a prompt or consumes model credits. See the
+[harness connection and support guide](docs/harnesses/README.md).
+
+Presets are in [`config/contestants.json`](config/contestants.json) and grouped by login in the dashboard.
+Discovery does not rewrite them. To add another CLI, see [docs/adding-a-model.md](docs/adding-a-model.md).
 
 Not usable on this machine right now:
 
@@ -165,7 +169,8 @@ cannot quantify the effect.
   look like secrets are rejected.
 - Race logs are written to `data/`, which is gitignored. They contain raw model answers.
 
-Details: [SECURITY.md](SECURITY.md).
+Details: [SECURITY.md](SECURITY.md). Discovery-specific privacy, PATH-shadowing, manifest, WSL, SSRF and
+supply-chain analysis is in the [discovery threat model](docs/security/discovery-threat-model.md).
 
 ## Project layout
 

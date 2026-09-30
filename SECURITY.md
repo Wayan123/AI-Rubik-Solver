@@ -13,9 +13,13 @@ Rubik Arena runs on your own machine and starts AI CLIs using **your** logins, s
 | API key exposure | Keys are read only from the runner's environment, via the `apiKeyEnv` variable name. Option keys that look like secrets (`apiKey`, `token`, `password`, …) are rejected. Plain `http` is refused for any host other than localhost. |
 | Runaway processes | Every request has a timeout and every run has a wall-time limit. Cancel sends SIGTERM, then SIGKILL after 5 s. |
 | Sensitive content in logs | Race files in `data/` (gitignored) contain prompts and raw answers. CLI stderr is truncated to 8 KB. Review these files before sharing them. |
+| Discovery leaks credentials or consumes model credits | Discovery runs only source-controlled version/model-list probes, never a prompt. It does not read auth stores, `.env`, IDE global state, conversations or histories. Public errors and locations are sanitized. |
+| IDE/Windows-host discovery crosses privacy boundaries | IDEs are detected from bounded manifests and are never launched. On WSL, the runner resolves the active Windows profile with one fixed interop probe; `RUBIK_WINDOWS_HOME` can override it. It never enumerates every Windows profile, and roots outside one canonical `/mnt/<drive>/Users/<profile>` path are rejected. Symlinks escaping an approved root are rejected. |
+| Update checking downloads malicious code or enables SSRF | Update checking is metadata-only against source-controlled HTTPS GitHub coordinates, does not follow redirects, and never downloads or executes a release. Set `RUBIK_DISCOVERY_OFFLINE=1` for no outbound discovery request. |
 
 Do not expose the runner with a reverse proxy, tunnel or `--host 0.0.0.0`. It is a local tool with no multi-user
-authentication.
+authentication. See the detailed [discovery threat model](docs/security/discovery-threat-model.md) and
+[harness contribution gate](docs/harnesses/adding-a-harness.md).
 
 ## Reporting
 
