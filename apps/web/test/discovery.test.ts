@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DiscoverySnapshot } from "../src/api.ts";
+import { ApiError, classifyRunnerConnectionError, type DiscoverySnapshot } from "../src/api.ts";
 import { contestantFromDiscoveredModel, filterDiscovery, isContestantStale } from "../src/discovery.ts";
 
 const snapshot: DiscoverySnapshot = {
@@ -53,6 +53,22 @@ const snapshot: DiscoverySnapshot = {
     },
   ],
 };
+
+describe("runner connection errors", () => {
+  it("classifies a stale bearer token as expired access rather than demo mode", () => {
+    expect(classifyRunnerConnectionError(new ApiError("missing or invalid token", 401))).toEqual({
+      kind: "auth",
+      reason: "This dashboard access link has expired. Reopen the latest link printed by the local runner.",
+    });
+  });
+
+  it("keeps network failures in demo mode", () => {
+    expect(classifyRunnerConnectionError(new TypeError("Failed to fetch"))).toEqual({
+      kind: "demo",
+      reason: "Failed to fetch",
+    });
+  });
+});
 
 describe("discovery view", () => {
   it("searches across model, provider and harness", () => {

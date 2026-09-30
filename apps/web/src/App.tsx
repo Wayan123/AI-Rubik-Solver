@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import {
   type AdapterStatus,
   bootstrapToken,
+  classifyRunnerConnectionError,
   type DiscoveredHarness,
   type DiscoveredModel,
   type DiscoverySnapshot,
@@ -30,6 +31,7 @@ import { emptyView, formatDuration, type RaceView, reduceRace } from "./state.ts
 type Connection =
   | { kind: "checking" }
   | { kind: "runner"; version: string }
+  | { kind: "auth"; reason: string }
   | { kind: "demo"; reason: string };
 
 const DEMO_ADAPTER_LIST: AdapterStatus[] = [
@@ -189,12 +191,15 @@ export function App() {
           });
       } catch (e) {
         if (cancelled) return;
-        setConn({ kind: "demo", reason: e instanceof Error ? e.message : String(e) });
-        setAdapters(DEMO_ADAPTER_LIST);
-        setContestants([
-          { id: "kociemba", label: "Kociemba", adapter: "kociemba", ...DEFAULTS },
-          { id: "random", label: "Random", adapter: "random", ...DEFAULTS, maxTurns: 10 },
-        ]);
+        const failure = classifyRunnerConnectionError(e);
+        setConn(failure);
+        if (failure.kind === "demo") {
+          setAdapters(DEMO_ADAPTER_LIST);
+          setContestants([
+            { id: "kociemba", label: "Kociemba", adapter: "kociemba", ...DEFAULTS },
+            { id: "random", label: "Random", adapter: "random", ...DEFAULTS, maxTurns: 10 },
+          ]);
+        }
       }
     })();
     return () => {
@@ -407,9 +412,17 @@ export function App() {
         <p className={`conn conn-${conn.kind}`} role="status">
           {conn.kind === "checking" && "Connecting to runner…"}
           {conn.kind === "runner" && `Local runner v${conn.version}`}
+          {conn.kind === "auth" && "Access link expired"}
           {conn.kind === "demo" && "Demo mode — baselines only"}
         </p>
       </header>
+
+      {conn.kind === "auth" && (
+        <p className="banner banner-error" role="alert">
+          {conn.reason} The runner is reachable, but this tab cannot use its old token. Your configured models
+          and race history are unchanged.
+        </p>
+      )}
 
       {conn.kind === "demo" && (
         <p className="banner" role="note">
