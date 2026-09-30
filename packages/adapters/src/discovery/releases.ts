@@ -1,7 +1,7 @@
 import type { HarnessDefinition, HarnessUpdate } from "./types.ts";
 
 export type ComparableVersion = [number, number, number];
-const RELEASE_LIMIT_BYTES = 256 * 1024;
+const RELEASE_LIMIT_BYTES = 512 * 1024;
 const releaseCache = new Map<string, Promise<ReleaseMetadata | undefined>>();
 
 interface ReleaseMetadata {

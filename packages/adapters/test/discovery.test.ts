@@ -52,9 +52,26 @@ describe("release metadata", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
 
     clearReleaseCache();
+    const padding = "x".repeat(300 * 1024);
     fetcher.mockResolvedValueOnce(
-      new Response("x".repeat(256 * 1024 + 1), {
-        headers: { "content-length": String(256 * 1024 + 1) },
+      new Response(
+        JSON.stringify({
+          tag_name: "v1.1.0",
+          html_url: "https://github.com/openai/codex/releases/tag/v1.1.0",
+          prerelease: false,
+          draft: false,
+          assets: [{ metadata: padding }],
+        }),
+      ),
+    );
+    await expect(
+      checkHarnessUpdate(definition, "1.0.0", { fetch: fetcher, offline: false }),
+    ).resolves.toMatchObject({ latest: "1.1.0" });
+
+    clearReleaseCache();
+    fetcher.mockResolvedValueOnce(
+      new Response("x".repeat(512 * 1024 + 1), {
+        headers: { "content-length": String(512 * 1024 + 1) },
       }),
     );
     await expect(checkHarnessUpdate(definition, "1.0.0", { fetch: fetcher, offline: false })).rejects.toThrow(
