@@ -143,6 +143,9 @@ h3 {
 .conn-runner::before {
   background: var(--ok);
 }
+.conn-auth::before {
+  background: var(--bad);
+}
 .conn-demo::before {
   background: var(--warn);
 }
@@ -152,6 +155,9 @@ h3 {
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
+}
+.banner-error {
+  color: var(--bad);
 }
 .layout {
   flex: 1;

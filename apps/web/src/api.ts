@@ -118,6 +118,18 @@ export class ApiError extends Error {
   }
 }
 
+export type RunnerConnectionFailure = { kind: "auth"; reason: string } | { kind: "demo"; reason: string };
+
+export function classifyRunnerConnectionError(error: unknown): RunnerConnectionFailure {
+  if (error instanceof ApiError && error.status === 401) {
+    return {
+      kind: "auth",
+      reason: "This dashboard access link has expired. Reopen the latest link printed by the local runner.",
+    };
+  }
+  return { kind: "demo", reason: error instanceof Error ? error.message : String(error) };
+}
+
 export class RunnerApi {
   constructor(
     private readonly token: string | null,
