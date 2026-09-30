@@ -8,6 +8,7 @@ interface Props {
   models: Record<string, string[]>;
   disabled: boolean;
   demo: boolean;
+  stale?: boolean;
   onChange: (next: ContestantConfig) => void;
   onRemove: () => void;
   onLoadModels: (adapterId: string) => void;
@@ -21,6 +22,7 @@ export function ContestantEditor({
   models,
   disabled,
   demo,
+  stale = false,
   onChange,
   onRemove,
   onLoadModels,
@@ -104,6 +106,11 @@ export function ContestantEditor({
             ))}
           </datalist>
         </label>
+      )}
+      {stale && (
+        <p className="hint warn" role="status">
+          Not present in the latest model catalog. You can keep this model ID or choose another.
+        </p>
       )}
       {value.adapter === "hermes" && (
         <label className="field">

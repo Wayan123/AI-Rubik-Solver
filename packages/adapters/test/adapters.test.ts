@@ -52,6 +52,32 @@ describe("spawnCli", () => {
     expect(lines).toEqual(["one", "two", "three"]);
   });
 
+  it("bounds captured stdout", async () => {
+    await expect(
+      spawnCli({
+        command: process.execPath,
+        args: [FAKE],
+        env: { FAKE_MODE: "flood" },
+        signal: never,
+        timeoutMs: 5000,
+        stdoutLimitBytes: 128,
+      }),
+    ).rejects.toThrow("stdout exceeded 128 bytes");
+  });
+
+  it("bounds captured stderr by UTF-8 bytes", async () => {
+    await expect(
+      spawnCli({
+        command: process.execPath,
+        args: [FAKE],
+        env: { FAKE_MODE: "stderr-flood" },
+        signal: never,
+        timeoutMs: 5000,
+        stderrLimitBytes: 128,
+      }),
+    ).rejects.toThrow("stderr exceeded 128 bytes");
+  });
+
   it("runs in a fresh empty temp dir that is removed afterwards", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ra-test-"));
     const argsFile = join(dir, "args.json");
@@ -258,6 +284,18 @@ describe("kiro-cli adapter", () => {
       "auto",
       "claude-opus-5.5",
     ]);
+  });
+
+  it("rejects malformed and oversized discovered model ids", () => {
+    const badPi = `provider model context\nopenai-codex bad\\u0000model 1k\nopenai-codex ${"x".repeat(300)} 1k\n`;
+    expect(parsePiModelList(badPi.replace("\\u0000", "\u0000"))).toEqual([]);
+    expect(
+      parseKiroModelList(
+        JSON.stringify({
+          models: [{ model_id: "bad/model" }, { model_id: "x".repeat(300) }, { model_id: "safe-model" }],
+        }),
+      ),
+    ).toEqual(["safe-model"]);
   });
 
   it("non-zero exit becomes a clear error with stderr (fake binary)", async () => {

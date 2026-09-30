@@ -1,8 +1,17 @@
 import type { ContestantConfig, RaceEvent } from "@rubik-arena/bench-core";
 import { formatMoves } from "@rubik-arena/cube-engine";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { type AdapterStatus, bootstrapToken, type RaceSummary, RunnerApi } from "./api.ts";
+import {
+  type AdapterStatus,
+  bootstrapToken,
+  type DiscoveredHarness,
+  type DiscoveredModel,
+  type DiscoverySnapshot,
+  type RaceSummary,
+  RunnerApi,
+} from "./api.ts";
 import { ContestantEditor } from "./components/ContestantEditor.tsx";
+import { HarnessCatalog } from "./components/HarnessCatalog.tsx";
 import { Lane, type LaneReplay } from "./components/Lane.tsx";
 import { Leaderboard } from "./components/Leaderboard.tsx";
 import { ReplayToolbar } from "./components/ReplayToolbar.tsx";
@@ -14,6 +23,7 @@ import {
   ScramblePanel,
 } from "./components/ScramblePanel.tsx";
 import { DEMO_ADAPTERS, runDemoRace } from "./demo.ts";
+import { contestantFromDiscoveredModel, isContestantStale } from "./discovery.ts";
 import { anyPlaying, buildTimeline, type LaneTimeline, replayReducer } from "./replay.ts";
 import { emptyView, formatDuration, type RaceView, reduceRace } from "./state.ts";
 
@@ -114,12 +124,24 @@ function eventReducer(view: RaceView, action: { event: RaceEvent; now: number } 
   return reduceRace(view, action.event, action.now);
 }
 
+async function waitForDiscovery(api: RunnerApi, generation: number): Promise<DiscoverySnapshot> {
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const status = await api.discoveryStatus();
+    if (status.generation >= generation && status.state !== "scanning") return api.discovery();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("Discovery scan is still running. Check again shortly.");
+}
+
 export function App() {
   const [token] = useState(() => bootstrapToken());
   const api = useMemo(() => new RunnerApi(token), [token]);
   const [conn, setConn] = useState<Connection>({ kind: "checking" });
   const [adapters, setAdapters] = useState<AdapterStatus[]>(DEMO_ADAPTER_LIST);
   const [models, setModels] = useState<Record<string, string[]>>({});
+  const [discovery, setDiscovery] = useState<DiscoverySnapshot | null>(null);
+  const [discoveryBusy, setDiscoveryBusy] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [contestants, setContestants] = useState<ContestantConfig[]>(FALLBACK_PRESETS);
   const [presets, setPresets] = useState<ContestantConfig[]>(FALLBACK_PRESETS);
   const [draft, setDraft] = useState<ScrambleDraft>(DEFAULT_DRAFT);
@@ -151,6 +173,20 @@ export function App() {
           setContestants(filled.slice(0, 2));
         }
         setHistory((await api.races()).races);
+        api
+          .discovery()
+          .then((snapshot) =>
+            snapshot.state === "scanning" ? waitForDiscovery(api, snapshot.generation) : snapshot,
+          )
+          .then((snapshot) => {
+            if (!cancelled) setDiscovery(snapshot);
+          })
+          .catch((discoveryFailure) => {
+            if (!cancelled)
+              setDiscoveryError(
+                discoveryFailure instanceof Error ? discoveryFailure.message : String(discoveryFailure),
+              );
+          });
       } catch (e) {
         if (cancelled) return;
         setConn({ kind: "demo", reason: e instanceof Error ? e.message : String(e) });
@@ -184,6 +220,29 @@ export function App() {
     },
     [api, demo, models],
   );
+
+  const refreshDiscovery = async () => {
+    if (demo || discoveryBusy) return;
+    setDiscoveryBusy(true);
+    setDiscoveryError(null);
+    try {
+      const accepted = await api.refreshDiscovery();
+      setDiscovery(accepted);
+      setDiscovery(await waitForDiscovery(api, accepted.generation));
+    } catch (e) {
+      setDiscoveryError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDiscoveryBusy(false);
+    }
+  };
+
+  const addDiscoveredModel = (model: DiscoveredModel, harness: DiscoveredHarness) => {
+    try {
+      setContestants((current) => [...current, contestantFromDiscoveredModel(model, harness, newId())]);
+    } catch (e) {
+      setDiscoveryError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const resolved = useMemo(() => resolveDraft(draft), [draft]);
 
@@ -392,6 +451,7 @@ export function App() {
                 models={models}
                 disabled={running}
                 demo={demo}
+                stale={isContestantStale(c, discovery)}
                 onChange={(next) => setContestants((cs) => cs.map((x, j) => (j === i ? next : x)))}
                 onRemove={() => setContestants((cs) => cs.filter((_, j) => j !== i))}
                 onLoadModels={loadModels}
@@ -425,6 +485,14 @@ export function App() {
                 </select>
               )}
             </div>
+
+            <HarnessCatalog
+              snapshot={discovery}
+              busy={discoveryBusy}
+              error={discoveryError}
+              onRefresh={() => void refreshDiscovery()}
+              onAddModel={addDiscoveredModel}
+            />
 
             <div className="actions">
               {running ? (

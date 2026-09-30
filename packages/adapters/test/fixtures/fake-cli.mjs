@@ -18,6 +18,12 @@ switch (mode) {
     process.stdout.write("one\ntwo\n");
     setTimeout(() => process.stdout.write("three"), 20);
     break;
+  case "flood":
+    process.stdout.write("x".repeat(4096));
+    break;
+  case "stderr-flood":
+    process.stderr.write("é".repeat(4096));
+    break;
   case "fail":
     process.stderr.write("Error: not logged in. Run login first.\n");
     process.exit(3);

@@ -156,6 +156,17 @@ export class KiroClient implements ModelClient {
 }
 
 export function parseKiroModelList(json: string): string[] {
-  const parsed = JSON.parse(json) as { models?: Array<{ model_id?: string }> };
-  return (parsed.models ?? []).map((m) => m.model_id).filter((m): m is string => Boolean(m));
+  const parsed = JSON.parse(json) as { models?: Array<{ model_id?: unknown }> };
+  const result: string[] = [];
+  for (const model of parsed.models ?? []) {
+    if (
+      typeof model.model_id === "string" &&
+      Buffer.byteLength(model.model_id) <= 256 &&
+      /^[\w.:-]+$/.test(model.model_id)
+    ) {
+      result.push(model.model_id);
+    }
+    if (result.length >= 2_000) break;
+  }
+  return result;
 }

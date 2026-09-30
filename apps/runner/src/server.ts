@@ -11,6 +11,7 @@ import {
 import type { Contestant, ContestantConfig, RaceEvent } from "@rubik-arena/bench-core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { hostAllowed, tokenMatches } from "./auth.ts";
+import type { DiscoveryService } from "./discovery.ts";
 import { RaceManager, ScrambleError } from "./races.ts";
 import { createRaceSchema } from "./schema.ts";
 import { RaceStore } from "./store.ts";
@@ -23,6 +24,7 @@ export interface ServerOptions {
   webDir?: string;
   presetsFile?: string;
   createContestant?: (config: ContestantConfig) => Contestant;
+  discovery?: DiscoveryService;
   logger?: boolean;
 }
 
@@ -63,6 +65,34 @@ export async function buildServer(opts: ServerOptions): Promise<RunnerServer> {
   });
 
   app.get("/api/health", async () => ({ ok: true, name: "rubik-arena-runner", version: VERSION }));
+
+  if (opts.discovery) {
+    app.get("/api/discovery", async () => opts.discovery!.ensureStarted());
+
+    app.get("/api/discovery/status", async () => {
+      const snapshot = opts.discovery!.getSnapshot();
+      return {
+        generation: snapshot.generation,
+        state: snapshot.state,
+        startedAt: snapshot.startedAt,
+        completedAt: snapshot.completedAt,
+        warningCount: snapshot.warnings.length,
+        offline: snapshot.offline,
+      };
+    });
+
+    app.post("/api/discovery/refresh", async (_req, reply) => {
+      const result = await opts.discovery!.refresh();
+      if (!result.accepted) {
+        const seconds = Math.max(1, Math.ceil(result.retryAfterMs / 1000));
+        return reply.header("retry-after", String(seconds)).code(429).send({
+          error: "discovery refresh cooldown",
+          retryAfterMs: result.retryAfterMs,
+        });
+      }
+      return reply.code(202).send(result.snapshot);
+    });
+  }
 
   app.get("/api/adapters", async (req) => {
     const detect = (req.query as { detect?: string }).detect !== "0";

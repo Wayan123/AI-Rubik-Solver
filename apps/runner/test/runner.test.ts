@@ -5,6 +5,7 @@ import { createContestant } from "@rubik-arena/adapters";
 import type { Contestant, ContestantConfig, RaceEvent } from "@rubik-arena/bench-core";
 import { applyMoves, randomState, SOLVED } from "@rubik-arena/cube-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DiscoveryService } from "../src/discovery.ts";
 import { buildServer, type RunnerServer } from "../src/index.ts";
 
 const PORT = 8799;
@@ -16,12 +17,13 @@ let srv: RunnerServer;
 
 const baseline = (id: string, adapter = "kociemba") => ({ id, label: id, adapter, mode: "interactive" });
 
-async function make(factory?: (c: ContestantConfig) => Contestant) {
+async function make(factory?: (c: ContestantConfig) => Contestant, discovery?: DiscoveryService) {
   srv = await buildServer({
     token: TOKEN,
     port: PORT,
     dataDir: dir,
     createContestant: factory ?? createContestant,
+    discovery,
   });
   return srv.app;
 }
@@ -33,6 +35,40 @@ afterEach(async () => {
   await srv?.races.cancelAll();
   await srv?.app.close();
   await rm(dir, { recursive: true, force: true });
+});
+
+describe("discovery API", () => {
+  const scan = () =>
+    Promise.resolve({ environments: [], harnesses: [], models: [], warnings: [], offline: true });
+
+  it("protects discovery routes and returns snapshot/status contracts", async () => {
+    const service = new DiscoveryService({ scan, offline: true });
+    const app = await make(undefined, service);
+    expect((await app.inject({ url: "/api/discovery", headers: { host: H.host } })).statusCode).toBe(401);
+    const full = await app.inject({ url: "/api/discovery", headers: H });
+    expect(full.statusCode).toBe(200);
+    expect(full.json()).toMatchObject({ generation: 1, state: "scanning", offline: true });
+    await service.whenIdle();
+    const status = await app.inject({ url: "/api/discovery/status", headers: H });
+    expect(status.statusCode).toBe(200);
+    expect(status.json().models).toBeUndefined();
+    expect(status.json().harnesses).toBeUndefined();
+  });
+
+  it("accepts refresh once then enforces cooldown", async () => {
+    let now = 100;
+    const service = new DiscoveryService({ scan, offline: true, now: () => now });
+    const app = await make(undefined, service);
+    await app.inject({ url: "/api/discovery", headers: H });
+    now = 10_100;
+    expect((await app.inject({ method: "POST", url: "/api/discovery/refresh", headers: H })).statusCode).toBe(
+      202,
+    );
+    now = 15_100;
+    const limited = await app.inject({ method: "POST", url: "/api/discovery/refresh", headers: H });
+    expect(limited.statusCode).toBe(429);
+    expect(limited.headers["retry-after"]).toBe("5");
+  });
 });
 
 describe("security", () => {

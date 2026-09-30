@@ -1,6 +1,6 @@
 # Rubik Arena — Project Memory
 
-Updated 2026-09-29. Labels: **observed** = checked by command or test, **inferred** = reasoned from evidence.
+Updated 2026-09-30. Labels: **observed** = checked by command or test, **inferred** = reasoned from evidence.
 
 ## Status
 
@@ -43,6 +43,21 @@ Live runs, all observed on 2026-09-29:
   `~/pwned.txt` (removed). The adapter uses `-t clarify`, and a repeat test created no file.
 - Pi provider extensions are auto-discovered from `~/.pi/agent/settings.json` packages. Nested model ids such as
   `nvidia/z-ai/glm-5.3` are accepted.
+
+## Automatic harness and model discovery (observed 2026-09-30)
+
+- The runner scans supported CLI harnesses at startup and exposes an authenticated discovery snapshot plus manual
+  refresh. Pi and Kiro CLI model lists are selectable; Hermes remains manually configured; Codex, Claude Code,
+  Gemini CLI, OpenCode and Aider are catalog-only until safe adapters are verified.
+- Known Continue, Cline, Roo Code and Codex extension manifests are detected file-only. WSL resolves one active or
+  configured Windows profile and can detect the Kiro IDE without launching any IDE or scanning every user profile.
+- Discovery does not send prompts. `RUBIK_DISCOVERY_OFFLINE=1` disables release metadata network requests. Only
+  the official Codex GitHub release source is enabled initially because its detected artifact-to-release mapping
+  was verified.
+- Security controls include source-controlled capabilities/commands, bounded stdout and manifests, timeout and
+  abort, symlink/path-containment checks, centralized public-output redaction, refresh single-flight plus cooldown,
+  and no credential/global-state/history reads.
+- Offline quality gate: 176 tests, lint, TypeScript typecheck and production build passed (observed).
 
 ## Next (M2 candidates)
 

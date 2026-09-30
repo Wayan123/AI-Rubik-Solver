@@ -1,4 +1,5 @@
 export * from "./auth.ts";
+export * from "./discovery.ts";
 export * from "./races.ts";
 export * from "./schema.ts";
 export * from "./server.ts";

@@ -1,4 +1,5 @@
 export * from "./baselines.ts";
+export * from "./discovery/index.ts";
 export * from "./hermes.ts";
 export * from "./kiro.ts";
 export * from "./openai.ts";
