@@ -377,6 +377,7 @@ input[aria-invalid="true"] {
   border-top: 1px solid var(--border);
 }
 .catalog-head,
+.catalog-tools,
 .harness-title,
 .model-list li {
   display: flex;
@@ -385,22 +386,37 @@ input[aria-invalid="true"] {
   gap: var(--space-2);
 }
 .catalog-head .btn,
+.catalog-tools .btn,
 .model-add {
   flex: 0 0 auto;
   min-height: 44px;
 }
 .catalog-head h3,
-.harness-title h4 {
+.provider-group h5 {
   margin: 0;
 }
-.catalog-search {
+.catalog-summary {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.catalog-content {
+  position: relative;
   margin-top: var(--space-3);
+}
+.catalog-tools {
+  align-items: flex-end;
+}
+.catalog-search {
+  flex: 1;
+  margin: 0;
 }
 .catalog-filters {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
-  margin: 0 0 var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
   padding: 0;
   border: 0;
 }
@@ -429,22 +445,52 @@ input[aria-invalid="true"] {
 .harness-item {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: var(--space-3);
   min-width: 0;
 }
-.harness-title p,
+.harness-title {
+  min-height: 52px;
+  padding: var(--space-3);
+  cursor: pointer;
+  list-style-position: outside;
+}
+.harness-title > span:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.harness-title small,
 .update-note,
 .catalog-state,
 .catalog-doc {
   margin: var(--space-1) 0 0;
   color: var(--text-muted);
   font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.harness-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.harness-body {
+  padding: 0 var(--space-3) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.provider-group {
+  margin-top: var(--space-3);
+}
+.provider-group h5 {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
 }
 .model-list {
   list-style: none;
   padding: var(--space-2) 0 0;
-  margin: var(--space-2) 0;
-  border-top: 1px solid var(--border);
+  margin: 0;
 }
 .model-list li {
   align-items: center;
@@ -456,6 +502,15 @@ input[aria-invalid="true"] {
 .model-add {
   padding: 6px 10px;
   font-size: 0.78rem;
+}
+.catalog-back-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  border-color: var(--accent);
+  background: var(--surface);
 }
 .badge-ready {
   color: var(--ok);
@@ -478,14 +533,19 @@ input[aria-invalid="true"] {
 }
 @media (max-width: 419px) {
   .catalog-head,
+  .catalog-tools,
   .harness-title,
   .model-list li {
     align-items: stretch;
     flex-direction: column;
   }
   .catalog-head .btn,
+  .catalog-tools .btn,
   .model-add {
     width: 100%;
+  }
+  .harness-meta {
+    justify-content: space-between;
   }
 }
 

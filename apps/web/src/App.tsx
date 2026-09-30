@@ -155,6 +155,7 @@ export function App() {
   const [history, setHistory] = useState<RaceSummary[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const abortRef = useRef<AbortController | null>(null);
+  const raceControlsRef = useRef<HTMLDivElement>(null);
   const demo = conn.kind === "demo";
   const running = view.status === "running";
 
@@ -243,7 +244,13 @@ export function App() {
 
   const addDiscoveredModel = (model: DiscoveredModel, harness: DiscoveredHarness) => {
     try {
-      setContestants((current) => [...current, contestantFromDiscoveredModel(model, harness, newId())]);
+      const id = newId();
+      setContestants((current) => [...current, contestantFromDiscoveredModel(model, harness, id)]);
+      requestAnimationFrame(() => {
+        const editor = document.getElementById(`contestant-${id}`);
+        editor?.scrollIntoView({ behavior: "smooth", block: "center" });
+        editor?.focus({ preventScroll: true });
+      });
     } catch (e) {
       setDiscoveryError(e instanceof Error ? e.message : String(e));
     }
@@ -499,15 +506,7 @@ export function App() {
               )}
             </div>
 
-            <HarnessCatalog
-              snapshot={discovery}
-              busy={discoveryBusy}
-              error={discoveryError}
-              onRefresh={() => void refreshDiscovery()}
-              onAddModel={addDiscoveredModel}
-            />
-
-            <div className="actions">
+            <div className="actions" ref={raceControlsRef} tabIndex={-1}>
               {running ? (
                 <button type="button" className="btn btn-danger" onClick={() => void cancel()}>
                   Cancel race
@@ -523,6 +522,18 @@ export function App() {
                 {error}
               </p>
             )}
+
+            <HarnessCatalog
+              snapshot={discovery}
+              busy={discoveryBusy}
+              error={discoveryError}
+              onRefresh={() => void refreshDiscovery()}
+              onAddModel={addDiscoveredModel}
+              onBackToTop={() => {
+                raceControlsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                raceControlsRef.current?.focus({ preventScroll: true });
+              }}
+            />
           </form>
         </aside>
 
